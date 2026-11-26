@@ -541,6 +541,7 @@ internal fun PlayerArea(
     playbackUrl: String,
     playbackHeaders: Map<String, String>,
     playbackStarted: Boolean,
+    playPending: Boolean = false,
     resolveFailed: Boolean,
     isFullscreen: Boolean,
     selectedEpisodeIndex: Int,
@@ -609,8 +610,8 @@ internal fun PlayerArea(
                     if (isFullscreen) Modifier.background(Color.Black)
                     else Modifier.shimmerPlaceholder()
                 )
-                // 解析中点击无意义，禁用点击；失败态点击任意处重试，就绪态点击播放
-                .clickable(enabled = !isResolving) {
+                // 解析中点击记录待播意图；失败态点击任意处重试，就绪态点击播放
+                .clickable {
                     // 起播与解析失败重试都属于有后果的操作
                     haptics.confirm()
                     if (resolveFailed) onRetry() else onPlayClick()
@@ -704,9 +705,12 @@ internal fun PlayerArea(
                 contentAlignment = Alignment.Center
             ) {
                 when {
-                    // 解析中：半透明胶囊提示，弱化干扰
+                    // 解析中：半透明胶囊提示，弱化干扰；已点击排队时明确提示将自动播放
                     isResolving -> Text(
-                        text = stringResource(R.string.detail_resolving),
+                        text = stringResource(
+                            if (playPending) R.string.detail_resolving_autoplay
+                            else R.string.detail_resolving
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.92f),
                         textAlign = TextAlign.Center,

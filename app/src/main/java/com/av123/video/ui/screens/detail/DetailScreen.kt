@@ -161,8 +161,18 @@ fun DetailScreen(
     // 画中画开关：控制全屏回桌面时是否自动进入小窗
     val appSettingsState by container.appSettingsState.collectAsStateWithLifecycle()
     val appSettings = appSettingsState.settings
-    // 用户点击播放后才交给播放器播放，不自动播放
+    // 用户点击播放后才交给播放器播放，不自动播放；解析期间点击则排队待流就绪后自动起播
     var playbackStarted by remember(videoId) { mutableStateOf(false) }
+    var playPending by remember(videoId) { mutableStateOf(false) }
+    LaunchedEffect(playback, playPending) {
+        if (playback != null && playPending) {
+            playbackStarted = true
+            playPending = false
+        }
+    }
+    LaunchedEffect(resolveFailed) {
+        if (resolveFailed) playPending = false
+    }
     val haptics = rememberAppHaptics()
     // 全屏状态：播放器组件内部同步系统栏与 Activity 方向
     var isFullscreen by remember(videoId) { mutableStateOf(false) }
@@ -200,7 +210,7 @@ fun DetailScreen(
             else -> null
         }
     }
-    val resolvingText = stringResource(R.string.detail_resolving)
+    val resolvingAutoPlayText = stringResource(R.string.detail_resolving_autoplay)
     val favoriteAddedText = stringResource(R.string.detail_favorite_added)
     val favoriteRemovedText = stringResource(R.string.detail_favorite_removed)
     val autoNextText = stringResource(R.string.detail_auto_next)
@@ -319,6 +329,7 @@ fun DetailScreen(
                     playbackUrl = playback?.url.orEmpty(),
                     playbackHeaders = playback?.headers.orEmpty(),
                     playbackStarted = playbackStarted,
+                    playPending = playPending,
                     resolveFailed = resolveFailed,
                     isFullscreen = isFullscreen,
                     isFavorite = isFavorite,
@@ -327,14 +338,22 @@ fun DetailScreen(
                     onToggleFavorite = onToggleFavorite,
                     onFullscreenChange = { isFullscreen = it },
                     onPlay = {
-                        // 已拦截到 m3u8：切换为播放器并开始播放；
-                        // 解析失败：重建拦截 WebView 重试；
-                        // 尚未解析到：提示等待（无头 WebView 正在播放页抓流）
-                        when {
-                            playback != null -> playbackStarted = true
-                            resolveFailed -> detailViewModel.retryResolve()
-                            else -> scope.launch {
-                                snackbarHostState.showAppSnackbar(resolvingText)
+                        when (resolveDetailPlayAction(playback != null, resolveFailed)) {
+                            DetailPlayClickAction.START_NOW -> {
+                                playPending = false
+                                playbackStarted = true
+                            }
+                            DetailPlayClickAction.RETRY_RESOLVE -> {
+                                playPending = true
+                                detailViewModel.retryResolve()
+                            }
+                            DetailPlayClickAction.QUEUE_PENDING -> {
+                                if (!playPending) {
+                                    playPending = true
+                                    scope.launch {
+                                        snackbarHostState.showAppSnackbar(resolvingAutoPlayText)
+                                    }
+                                }
                             }
                         }
                     },
@@ -490,12 +509,28 @@ internal fun FullscreenBackFallback(
     BackHandler(enabled = isFullscreen, onBack = onExitFullscreen)
 }
 
+internal enum class DetailPlayClickAction {
+    START_NOW,
+    QUEUE_PENDING,
+    RETRY_RESOLVE
+}
+
+internal fun resolveDetailPlayAction(
+    hasPlayback: Boolean,
+    resolveFailed: Boolean
+): DetailPlayClickAction = when {
+    hasPlayback -> DetailPlayClickAction.START_NOW
+    resolveFailed -> DetailPlayClickAction.RETRY_RESOLVE
+    else -> DetailPlayClickAction.QUEUE_PENDING
+}
+
 @Composable
 private fun DetailContent(
     video: Video,
     playbackUrl: String,
     playbackHeaders: Map<String, String>,
     playbackStarted: Boolean,
+    playPending: Boolean,
     resolveFailed: Boolean,
     isFullscreen: Boolean,
     isFavorite: Boolean,
@@ -540,6 +575,7 @@ private fun DetailContent(
             playbackUrl = playbackUrl,
             playbackHeaders = playbackHeaders,
             playbackStarted = playbackStarted,
+            playPending = playPending,
             resolveFailed = resolveFailed,
             isFullscreen = isFullscreen,
             selectedEpisodeIndex = selectedEpisodeIndex,
