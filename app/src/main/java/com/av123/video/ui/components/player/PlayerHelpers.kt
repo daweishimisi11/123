@@ -45,6 +45,29 @@ internal fun classifyVerticalGestureSide(startX: Float, widthPx: Float): Vertica
     if (startX < widthPx / 2f) VerticalGestureSide.BRIGHTNESS else VerticalGestureSide.VOLUME
 
 /**
+ * 判断全屏手势起点是否落在有效操作安全区内，避免边缘系统手势误触发亮度/音量/快进调节：
+ * - 上下各留 [verticalDeadZonePx] 死区（避开顶部下拉状态栏/通知栏与底部上滑导航栏）；
+ * - 左右各留 [horizontalDeadZonePx] 死区（避开全面屏侧边返回手势）；
+ * - 对小尺寸窗口按容器尺寸比例做上限钳制，防止安全区被过度压缩。
+ */
+internal fun isWithinPlayerGestureSafeZone(
+    startX: Float,
+    startY: Float,
+    widthPx: Float,
+    heightPx: Float,
+    verticalDeadZonePx: Float,
+    horizontalDeadZonePx: Float = 0f
+): Boolean {
+    if (widthPx <= 0f || heightPx <= 0f) return false
+    val clampedVDead = verticalDeadZonePx.coerceIn(0f, heightPx * 0.2f)
+    val clampedHDead = horizontalDeadZonePx.coerceIn(0f, widthPx * 0.1f)
+    return startY >= clampedVDead &&
+        startY <= (heightPx - clampedVDead) &&
+        startX >= clampedHDead &&
+        startX <= (widthPx - clampedHDead)
+}
+
+/**
  * 竖滑调节指示条停靠在对侧，避免被调节手指遮挡并让出画面中心视野：
  * 左侧滑调亮度时显示在右侧；右侧滑调音量时显示在左侧。
  */

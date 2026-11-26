@@ -253,4 +253,30 @@ class PlayerHelpersTest {
             )
         )
     }
+
+    @Test
+    fun `isWithinPlayerGestureSafeZone rejects system bar edge dead zones and accepts interior`() {
+        val width = 2400f
+        val height = 1080f
+        val vDead = 150f
+        val hDead = 72f
+
+        // 顶部下拉状态栏死区
+        assertFalse(isWithinPlayerGestureSafeZone(300f, 80f, width, height, vDead, hDead))
+        assertFalse(isWithinPlayerGestureSafeZone(2000f, 149f, width, height, vDead, hDead))
+
+        // 底部上滑导航栏死区
+        assertFalse(isWithinPlayerGestureSafeZone(300f, 1000f, width, height, vDead, hDead))
+        assertFalse(isWithinPlayerGestureSafeZone(2000f, 931f, width, height, vDead, hDead))
+
+        // 左右全面屏侧滑返回死区
+        assertFalse(isWithinPlayerGestureSafeZone(40f, 540f, width, height, vDead, hDead))
+        assertFalse(isWithinPlayerGestureSafeZone(2360f, 540f, width, height, vDead, hDead))
+
+        // 左右中间安全区域正常响应亮度与音量手势
+        assertTrue(isWithinPlayerGestureSafeZone(300f, 540f, width, height, vDead, hDead))
+        assertTrue(isWithinPlayerGestureSafeZone(2000f, 540f, width, height, vDead, hDead))
+        assertTrue(isWithinPlayerGestureSafeZone(300f, 150f, width, height, vDead, hDead))
+        assertTrue(isWithinPlayerGestureSafeZone(2000f, 930f, width, height, vDead, hDead))
+    }
 }

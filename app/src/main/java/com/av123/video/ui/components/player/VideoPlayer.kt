@@ -188,6 +188,12 @@ private const val FLIP_TO_EXIT_HOLD_MS = 500L
 /** 竖向滑动亮度/音量指示条在松手后的短暂停留时长（毫秒），便于确认最终数值 */
 private const val GESTURE_OVERLAY_LINGER_MS = 650L
 
+/** 全屏上下边缘手势死区：避开下拉状态栏/通知栏与上滑导航栏手势 */
+private val FULLSCREEN_GESTURE_VERTICAL_DEAD_ZONE = 52.dp
+
+/** 全屏左右边缘手势死区：避开系统侧滑返回手势 */
+private val FULLSCREEN_GESTURE_HORIZONTAL_DEAD_ZONE = 24.dp
+
 /**
  * 现代风格流媒体播放器。
  *
@@ -363,6 +369,9 @@ fun VideoPlayer(
     }
     val currentFullscreen by rememberUpdatedState(isFullscreen)
     val currentSeekSensitivity by rememberUpdatedState(seekGestureSensitivity)
+    val density = LocalDensity.current
+    val verticalGestureDeadZonePx = with(density) { FULLSCREEN_GESTURE_VERTICAL_DEAD_ZONE.toPx() }
+    val horizontalGestureDeadZonePx = with(density) { FULLSCREEN_GESTURE_HORIZONTAL_DEAD_ZONE.toPx() }
     LaunchedEffect(verticalGestureReleaseTick, verticalGestureVisible) {
         if (verticalGestureVisible && verticalGestureReleaseTick > 0) {
             delay(GESTURE_OVERLAY_LINGER_MS.milliseconds)
@@ -777,17 +786,29 @@ fun VideoPlayer(
                         }
                     )
                 }
-                .pointerInput(isLocked) {
+                .pointerInput(isLocked, verticalGestureDeadZonePx, horizontalGestureDeadZonePx) {
                     // 横滑 Seek：累积横向位移换算成目标时间，拖动中只显示预览气泡，
-                    // 抬手才真正 seekTo（主流 App 交互，避免拖动中途频繁跳转）
+                    // 抬手才真正 seekTo（主流 App 交互，避免拖动中途频繁跳转）；
+                    // 全屏下避开边缘系统手势死区，防止边缘操作误触发快进/快退
                     var accumulatedDx = 0f
                     var startPositionMs = 0L
                     var active = false
+                    var seekAllowed = false
                     detectHorizontalDragGestures(
-                        onDragStart = {
+                        onDragStart = { startOffset ->
                             accumulatedDx = 0f
                             startPositionMs = position
                             active = false
+                            seekAllowed = !isInPip && error == null && !isLocked && (
+                                !currentFullscreen || isWithinPlayerGestureSafeZone(
+                                    startX = startOffset.x,
+                                    startY = startOffset.y,
+                                    widthPx = size.width.toFloat(),
+                                    heightPx = size.height.toFloat(),
+                                    verticalDeadZonePx = verticalGestureDeadZonePx,
+                                    horizontalDeadZonePx = horizontalGestureDeadZonePx
+                                )
+                                )
                         },
                         onDragEnd = {
                             if (active) {
@@ -799,14 +820,16 @@ fun VideoPlayer(
                             }
                             seekPreviewTargetMs = null
                             active = false
+                            seekAllowed = false
                         },
                         onDragCancel = {
                             if (active) isSeeking = false
                             seekPreviewTargetMs = null
                             active = false
+                            seekAllowed = false
                         },
                         onHorizontalDrag = { _, dragAmount ->
-                            if (isInPip || error != null || isLocked ||
+                            if (!seekAllowed || isInPip || error != null || isLocked ||
                                 duration <= 0L
                             ) {
                                 return@detectHorizontalDragGestures
@@ -828,18 +851,33 @@ fun VideoPlayer(
                         }
                     )
                 }
-                .pointerInput(isLocked) {
-                    // 竖向滑动手势（全屏生效）：左侧调屏幕亮度，右侧调媒体音量
+                .pointerInput(isLocked, verticalGestureDeadZonePx, horizontalGestureDeadZonePx) {
+                    // 竖向滑动手势（全屏安全区内生效）：左侧调屏幕亮度，右侧调媒体音量；
+                    // 顶部下拉状态栏 / 底部上滑导航栏 / 侧边返回等边缘死区发起的手势直接忽略
                     var gestureSide = VerticalGestureSide.VOLUME
                     var accumulatedDy = 0f
                     var startValue = 0.5f
                     var maxVolume = 15
                     var lastAppliedVolume = -1
                     var active = false
+                    var gestureAllowed = false
                     detectVerticalDragGestures(
                         onDragStart = { startOffset ->
                             accumulatedDy = 0f
                             active = false
+                            gestureAllowed = currentFullscreen &&
+                                !isInPip &&
+                                error == null &&
+                                !isLocked &&
+                                isWithinPlayerGestureSafeZone(
+                                    startX = startOffset.x,
+                                    startY = startOffset.y,
+                                    widthPx = size.width.toFloat(),
+                                    heightPx = size.height.toFloat(),
+                                    verticalDeadZonePx = verticalGestureDeadZonePx,
+                                    horizontalDeadZonePx = horizontalGestureDeadZonePx
+                                )
+                            if (!gestureAllowed) return@detectVerticalDragGestures
                             gestureSide = classifyVerticalGestureSide(
                                 startX = startOffset.x,
                                 widthPx = size.width.toFloat().coerceAtLeast(1f)
@@ -869,13 +907,15 @@ fun VideoPlayer(
                         onDragEnd = {
                             if (active) verticalGestureReleaseTick++
                             active = false
+                            gestureAllowed = false
                         },
                         onDragCancel = {
                             if (active) verticalGestureReleaseTick++
                             active = false
+                            gestureAllowed = false
                         },
                         onVerticalDrag = { _, dragAmount ->
-                            if (!currentFullscreen || isInPip || error != null || isLocked) {
+                            if (!gestureAllowed || !currentFullscreen || isInPip || error != null || isLocked) {
                                 return@detectVerticalDragGestures
                             }
                             active = true
