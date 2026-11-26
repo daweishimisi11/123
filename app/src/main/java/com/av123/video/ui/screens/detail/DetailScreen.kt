@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -165,6 +166,13 @@ fun DetailScreen(
     val haptics = rememberAppHaptics()
     // 全屏状态：播放器组件内部同步系统栏与 Activity 方向
     var isFullscreen by remember(videoId) { mutableStateOf(false) }
+
+    // 切集或重新抓流时 VideoPlayer 会短暂卸载，在详情页外层兜底全屏返回键，
+    // 防止返回事件直接穿透到导航栈退出整个详情页
+    FullscreenBackFallback(
+        isFullscreen = isFullscreen,
+        onExitFullscreen = { isFullscreen = false }
+    )
 
     // 双栏外壳需要跟随全屏隐藏左栏/底栏：每次全屏态变化（含切集重建）都上抛
     LaunchedEffect(isFullscreen, onFullscreenStateChange) {
@@ -473,6 +481,14 @@ internal fun Video.detailCodeFromInfoRows(): String = infoRows
     ?.value
     ?.trim()
     .orEmpty()
+
+@Composable
+internal fun FullscreenBackFallback(
+    isFullscreen: Boolean,
+    onExitFullscreen: () -> Unit
+) {
+    BackHandler(enabled = isFullscreen, onBack = onExitFullscreen)
+}
 
 @Composable
 private fun DetailContent(
