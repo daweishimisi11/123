@@ -83,6 +83,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -416,15 +417,80 @@ internal fun DetailInfoRow(
  * 第二行右端，再按“…更多”的[TextMeasurer]实测像素宽度用 getOffsetForHorizontal
  * 反查切点——对中英日文/全角半角混排都准确，且只测量一次。
  */
+internal data class DetailTextMetrics(
+    val headerCodeFontSp: Float,
+    val headerCodeLineHeightSp: Float,
+    val headerMaxLines: Int,
+    val topBarHeightDp: Int,
+    val videoTitleFontSp: Float,
+    val videoTitleLineHeightSp: Float
+)
+
+/**
+ * 详情页自适应字号：竖屏紧凑屏上把顶栏番号和片名调小到「略大于简介（14sp）」的区间，
+ * 既释放纵向空间，也避免大字重排导致内容显示不全。
+ */
+internal fun resolveDetailTextMetrics(
+    screenWidthDp: Int,
+    isPortrait: Boolean
+): DetailTextMetrics = when {
+    isPortrait && screenWidthDp < 380 -> DetailTextMetrics(
+        headerCodeFontSp = 15f,
+        headerCodeLineHeightSp = 19f,
+        headerMaxLines = 2,
+        topBarHeightDp = 48,
+        videoTitleFontSp = 15.5f,
+        videoTitleLineHeightSp = 21f
+    )
+    isPortrait && screenWidthDp < 600 -> DetailTextMetrics(
+        headerCodeFontSp = 15.5f,
+        headerCodeLineHeightSp = 20f,
+        headerMaxLines = 2,
+        topBarHeightDp = 52,
+        videoTitleFontSp = 16f,
+        videoTitleLineHeightSp = 22f
+    )
+    isPortrait -> DetailTextMetrics(
+        headerCodeFontSp = 17f,
+        headerCodeLineHeightSp = 22f,
+        headerMaxLines = 2,
+        topBarHeightDp = 56,
+        videoTitleFontSp = 17.5f,
+        videoTitleLineHeightSp = 24f
+    )
+    screenWidthDp < 840 -> DetailTextMetrics(
+        headerCodeFontSp = 16f,
+        headerCodeLineHeightSp = 21f,
+        headerMaxLines = 1,
+        topBarHeightDp = 56,
+        videoTitleFontSp = 17f,
+        videoTitleLineHeightSp = 23f
+    )
+    else -> DetailTextMetrics(
+        headerCodeFontSp = 18f,
+        headerCodeLineHeightSp = 24f,
+        headerMaxLines = 1,
+        topBarHeightDp = 64,
+        videoTitleFontSp = 18f,
+        videoTitleLineHeightSp = 25f
+    )
+}
+
 @Composable
-internal fun ExpandableTitle(text: String) {
+internal fun ExpandableTitle(
+    text: String,
+    titleStyle: TextStyle = MaterialTheme.typography.titleMedium.copy(
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.SemiBold
+    )
+) {
     // 详情从缓存条目补全为完整标题时全部重置，避免沿用上一个标题的展开/截断状态
     var expanded by remember(text) { mutableStateOf(false) }
     var overflowing by remember(text) { mutableStateOf(false) }
     // 折叠态保留的正文字符数；-1 = 尚未测量，首帧先渲染全文参与溢出检测
     var cutIndex by remember(text) { mutableIntStateOf(-1) }
 
-    val titleStyle = MaterialTheme.typography.headlineSmall
     val primaryColor = MaterialTheme.colorScheme.primary
     val expandLabel = stringResource(R.string.title_expand)
     val collapseLabel = stringResource(R.string.detail_collapse)

@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -75,12 +76,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -239,16 +242,28 @@ fun DetailScreen(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    val detailTextMetrics = remember(configuration.screenWidthDp, isPortrait) {
+        resolveDetailTextMetrics(configuration.screenWidthDp, isPortrait)
+    }
+
     Scaffold(
         // 全屏时隐藏 TopAppBar。始终走同一个 Scaffold 分支：全屏切换只改播放区
         // 尺寸、不替换组合树，避免 AndroidView(PlayerView) 销毁重建产生黑帧
         topBar = {
             if (!isFullscreen) {
                 TopAppBar(
+                    expandedHeight = detailTextMetrics.topBarHeightDp.dp,
                     title = {
                         Text(
                             text = video?.detailHeaderTitle().orEmpty(),
-                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = detailTextMetrics.headerCodeFontSp.sp,
+                                lineHeight = detailTextMetrics.headerCodeLineHeightSp.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            maxLines = detailTextMetrics.headerMaxLines,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
@@ -675,8 +690,22 @@ private fun DetailBody(
     onVideoClick: (String) -> Unit
 ) {
     val haptics = rememberAppHaptics()
+    val configuration = LocalConfiguration.current
+    val detailTextMetrics = remember(configuration.screenWidthDp, configuration.orientation) {
+        resolveDetailTextMetrics(
+            screenWidthDp = configuration.screenWidthDp,
+            isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        )
+    }
     Column(Modifier.padding(16.dp)) {
-        ExpandableTitle(text = video.title)
+        ExpandableTitle(
+            text = video.title,
+            titleStyle = MaterialTheme.typography.titleMedium.copy(
+                fontSize = detailTextMetrics.videoTitleFontSp.sp,
+                lineHeight = detailTextMetrics.videoTitleLineHeightSp.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        )
         Spacer(Modifier.height(10.dp))
 
         // 元信息：时长 / 观看 / 发布 / 年份。
