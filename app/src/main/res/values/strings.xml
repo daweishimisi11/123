@@ -530,6 +530,10 @@
     <string name="player_stat_audio_sample_rate">音频采样率</string>
     <string name="player_stat_audio_channels">音频声道</string>
     <string name="player_stat_buffer_health">缓冲健康</string>
+    <string name="player_buffer_badge_label">缓冲</string>
+    <string name="player_settings_buffer_health">左上角缓冲秒数</string>
+    <string name="profile_show_buffer_health">左上角显示缓冲健康</string>
+    <string name="profile_show_buffer_health_desc">全屏播放时在左上角常驻显示当前可播缓冲秒数</string>
     <string name="player_stat_speed">播放倍速</string>
     <string name="player_stat_state">状态</string>
     <string name="player_audio_channels_fmt">%1$d 声道</string>

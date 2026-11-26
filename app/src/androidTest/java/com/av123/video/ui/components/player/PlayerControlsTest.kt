@@ -21,6 +21,7 @@ class PlayerControlsTest {
 
     @Test
     fun settingsSheet_excludesPlaybackSpeedAndEpisodeControls() {
+        var bufferToggledTo: Boolean? = null
         composeRule.setContent {
             SettingsSheet(
                 resizeMode = ResizeModeOption.FIT,
@@ -29,6 +30,8 @@ class PlayerControlsTest {
                 onAutoPlayNextChange = {},
                 flipToExitEnabled = false,
                 onFlipToExitChange = {},
+                showBufferHealth = false,
+                onShowBufferHealthChange = { bufferToggledTo = it },
                 onShowStats = {},
                 onDismiss = {}
             )
@@ -39,6 +42,18 @@ class PlayerControlsTest {
         composeRule.onNodeWithText("倍速").assertDoesNotExist()
         composeRule.onNodeWithText("1.5x").assertDoesNotExist()
         composeRule.onNodeWithText("选集").assertDoesNotExist()
+        composeRule.onNodeWithText("左上角缓冲秒数").assertIsDisplayed().performClick()
+        assertEquals(true, bufferToggledTo)
+    }
+
+    @Test
+    fun bufferHealthBadge_displaysLabelAndSeconds() {
+        composeRule.setContent {
+            BufferHealthBadge(bufferSeconds = 12.4f)
+        }
+
+        composeRule.onNodeWithText("缓冲").assertIsDisplayed()
+        composeRule.onNodeWithText("12.4s").assertIsDisplayed()
     }
 
     @Test

@@ -259,6 +259,23 @@ internal fun resolveSelectedVideoHeight(tracks: Tracks): Int {
     return 0
 }
 
+internal enum class BufferHealthLevel { LOW, FAIR, GOOD }
+
+/** 计算当前播放位置前方的剩余缓冲时长（秒），负差值钳制为 0 */
+internal fun computeBufferHealthSeconds(positionMs: Long, bufferedPositionMs: Long): Float =
+    (bufferedPositionMs - positionMs).coerceAtLeast(0L) / 1000f
+
+/** 格式化缓冲健康秒数文本（如 12.4s / 0.0s） */
+internal fun formatBufferHealthSeconds(bufferSeconds: Float): String =
+    String.format(java.util.Locale.US, "%.1fs", bufferSeconds.coerceAtLeast(0f))
+
+/** 缓冲健康分级：低于 3s 告警、3–10s 一般、10s 及以上健康 */
+internal fun resolveBufferHealthLevel(bufferSeconds: Float): BufferHealthLevel = when {
+    bufferSeconds < 3f -> BufferHealthLevel.LOW
+    bufferSeconds < 10f -> BufferHealthLevel.FAIR
+    else -> BufferHealthLevel.GOOD
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun buildTrackSelectionParameters(
     currentParameters: TrackSelectionParameters,

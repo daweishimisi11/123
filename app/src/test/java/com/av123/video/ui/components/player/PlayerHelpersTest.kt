@@ -311,4 +311,16 @@ class PlayerHelpersTest {
             resolveAutoTrackMenuLabel(autoLabel = "自动", activeHeight = 0)
         )
     }
+
+    @Test
+    fun `buffer health seconds and health level clamp negatives and classify tiers`() {
+        assertEquals(0f, computeBufferHealthSeconds(positionMs = 10_000L, bufferedPositionMs = 8_000L), 0.001f)
+        assertEquals(12.4f, computeBufferHealthSeconds(positionMs = 5_000L, bufferedPositionMs = 17_400L), 0.001f)
+        assertEquals("12.4s", formatBufferHealthSeconds(12.4f))
+        assertEquals("0.0s", formatBufferHealthSeconds(-1.2f))
+
+        assertEquals(BufferHealthLevel.LOW, resolveBufferHealthLevel(1.5f))
+        assertEquals(BufferHealthLevel.FAIR, resolveBufferHealthLevel(6.0f))
+        assertEquals(BufferHealthLevel.GOOD, resolveBufferHealthLevel(12.4f))
+    }
 }

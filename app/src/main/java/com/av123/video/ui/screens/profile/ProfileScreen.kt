@@ -608,6 +608,24 @@ fun ProfileScreen(
                         },
                         onClick = { showSeekSensitivitySheet = true }
                     )
+                    SettingsDivider()
+                    SettingsItem(
+                        icon = AppIcons.Timer,
+                        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        title = stringResource(R.string.profile_show_buffer_health),
+                        subtitle = stringResource(R.string.profile_show_buffer_health_desc),
+                        trailing = {
+                            HapticSwitch(
+                                checked = settings.showBufferHealth,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        container.settingsStore.setShowBufferHealth(enabled)
+                                    }
+                                }
+                            )
+                        }
+                    )
                 }
             }
 

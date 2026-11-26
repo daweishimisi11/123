@@ -63,7 +63,9 @@ data class AppSettings(
     /** 阻止截屏/录屏，并在最近任务中隐藏预览 */
     val secureScreenEnabled: Boolean = true,
     /** 横滑快进/快退手势灵敏度，默认适中（适合几秒到几十秒微调） */
-    val seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
+    val seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
+    /** 全屏播放时是否在左上角常驻显示缓冲健康秒数 */
+    val showBufferHealth: Boolean = false
 )
 
 /**
@@ -132,7 +134,8 @@ class SettingsStore(context: Context) {
                 SeekGestureSensitivity.valueOf(
                     prefs[KEY_SEEK_GESTURE_SENSITIVITY] ?: SeekGestureSensitivity.STANDARD.name
                 )
-            }.getOrDefault(SeekGestureSensitivity.STANDARD)
+            }.getOrDefault(SeekGestureSensitivity.STANDARD),
+            showBufferHealth = prefs[KEY_SHOW_BUFFER_HEALTH] ?: false
         )
     }.onEach { writeStartupMirror(it) }
 
@@ -192,6 +195,10 @@ class SettingsStore(context: Context) {
         store.edit { it[KEY_SEEK_GESTURE_SENSITIVITY] = sensitivity.name }
     }
 
+    suspend fun setShowBufferHealth(enabled: Boolean) {
+        store.edit { it[KEY_SHOW_BUFFER_HEALTH] = enabled }
+    }
+
     private companion object {
         const val STARTUP_PREFS = "startup_settings"
         const val STARTUP_KEY_DARK_MODE = "dark_mode"
@@ -209,5 +216,6 @@ class SettingsStore(context: Context) {
         val KEY_APP_LOCK_TIMEOUT = stringPreferencesKey("app_lock_timeout")
         val KEY_SECURE_SCREEN = booleanPreferencesKey("secure_screen")
         val KEY_SEEK_GESTURE_SENSITIVITY = stringPreferencesKey("seek_gesture_sensitivity")
+        val KEY_SHOW_BUFFER_HEALTH = booleanPreferencesKey("show_buffer_health")
     }
 }

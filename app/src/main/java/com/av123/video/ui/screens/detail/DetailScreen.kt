@@ -398,6 +398,10 @@ fun DetailScreen(
                     onFlipToExitChange = { enabled ->
                         scope.launch { container.settingsStore.setFlipToExitEnabled(enabled) }
                     },
+                    showBufferHealth = appSettings.showBufferHealth,
+                    onShowBufferHealthChange = { enabled ->
+                        scope.launch { container.settingsStore.setShowBufferHealth(enabled) }
+                    },
                     resizeMode = appSettings.videoResizeMode,
                     onResizeModeChange = { mode ->
                         scope.launch { container.settingsStore.setVideoResizeMode(mode) }
@@ -600,6 +604,8 @@ private fun DetailContent(
     onAutoPlayNextChange: (Boolean) -> Unit = {},
     flipToExitEnabled: Boolean = false,
     onFlipToExitChange: (Boolean) -> Unit = {},
+    showBufferHealth: Boolean = false,
+    onShowBufferHealthChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
@@ -635,6 +641,8 @@ private fun DetailContent(
             onAutoPlayNextChange = onAutoPlayNextChange,
             flipToExitEnabled = flipToExitEnabled,
             onFlipToExitChange = onFlipToExitChange,
+            showBufferHealth = showBufferHealth,
+            onShowBufferHealthChange = onShowBufferHealthChange,
             resizeMode = resizeMode,
             onResizeModeChange = onResizeModeChange,
             seekGestureSensitivity = seekGestureSensitivity,

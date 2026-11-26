@@ -32,6 +32,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -59,16 +60,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -251,6 +257,8 @@ fun VideoPlayer(
     onAutoPlayNextChange: (Boolean) -> Unit = {},
     flipToExitEnabled: Boolean = false,
     onFlipToExitChange: (Boolean) -> Unit = {},
+    showBufferHealth: Boolean = false,
+    onShowBufferHealthChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
@@ -1163,6 +1171,8 @@ fun VideoPlayer(
                 onAutoPlayNextChange = onAutoPlayNextChange,
                 flipToExitEnabled = flipToExitEnabled,
                 onFlipToExitChange = onFlipToExitChange,
+                showBufferHealth = showBufferHealth,
+                onShowBufferHealthChange = onShowBufferHealthChange,
                 resizeMode = resizeMode,
                 onResizeModeChange = onResizeModeChange,
                 modifier = Modifier.fillMaxSize()
@@ -1212,6 +1222,33 @@ fun VideoPlayer(
                         end = 12.dp,
                         top = if (isFullscreen) 56.dp else 12.dp
                     )
+            )
+        }
+
+        // 全屏左上角单独的缓冲健康秒数胶囊（仅在开启开关且统计浮层未打开时展示）
+        val bufferHealthTopPadding by animateDpAsState(
+            targetValue = if (isControllerVisible && !isLocked) 54.dp else 14.dp,
+            animationSpec = tween(durationMillis = 180),
+            label = "bufferHealthTopPadding"
+        )
+        AnimatedVisibility(
+            visible = isFullscreen &&
+                showBufferHealth &&
+                error == null &&
+                !isInPip &&
+                !showPlaybackStats,
+            enter = fadeIn(Motion.Overlay),
+            exit = fadeOut(Motion.Overlay),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Start))
+                .padding(start = 16.dp, top = bufferHealthTopPadding)
+        ) {
+            BufferHealthBadge(
+                bufferSeconds = computeBufferHealthSeconds(
+                    positionMs = position,
+                    bufferedPositionMs = bufferedPosition
+                )
             )
         }
 

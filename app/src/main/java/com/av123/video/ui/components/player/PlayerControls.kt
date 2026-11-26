@@ -199,6 +199,8 @@ internal fun PlayerControls(
     onAutoPlayNextChange: (Boolean) -> Unit,
     flipToExitEnabled: Boolean,
     onFlipToExitChange: (Boolean) -> Unit,
+    showBufferHealth: Boolean = false,
+    onShowBufferHealthChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption,
     onResizeModeChange: (ResizeModeOption) -> Unit,
     modifier: Modifier = Modifier
@@ -731,6 +733,8 @@ internal fun PlayerControls(
                 onAutoPlayNextChange = onAutoPlayNextChange,
                 flipToExitEnabled = flipToExitEnabled,
                 onFlipToExitChange = onFlipToExitChange,
+                showBufferHealth = showBufferHealth,
+                onShowBufferHealthChange = onShowBufferHealthChange,
                 onShowStats = {
                     showSettingsSheet = false
                     onShowPlaybackStats()
@@ -862,6 +866,8 @@ internal fun SettingsSheet(
     onAutoPlayNextChange: (Boolean) -> Unit,
     flipToExitEnabled: Boolean,
     onFlipToExitChange: (Boolean) -> Unit,
+    showBufferHealth: Boolean = false,
+    onShowBufferHealthChange: (Boolean) -> Unit = {},
     onShowStats: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -940,6 +946,12 @@ internal fun SettingsSheet(
             label = stringResource(R.string.profile_flip_to_exit),
             checked = flipToExitEnabled,
             onCheckedChange = onFlipToExitChange
+        )
+        SettingsSheetDivider()
+        SettingsSheetSwitchRow(
+            label = stringResource(R.string.player_settings_buffer_health),
+            checked = showBufferHealth,
+            onCheckedChange = onShowBufferHealthChange
         )
         SettingsSheetDivider()
         SettingsSheetRow(

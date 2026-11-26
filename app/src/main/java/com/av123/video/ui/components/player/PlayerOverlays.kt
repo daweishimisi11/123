@@ -8,6 +8,7 @@ import com.av123.video.ui.theme.AppTypeScale
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
@@ -435,5 +436,60 @@ internal fun ErrorOverlay(
                 }
             }
         }
+    }
+}
+
+/**
+ * 全屏左上角轻量级缓冲健康胶囊：
+ * 仅在超宽手机全屏观影时停靠左上留白区，以状态小圆点 + 等宽数字秒数自然呈现在画面边角，
+ * 不抢视线、数字变化无横向抖动。
+ */
+@Composable
+internal fun BufferHealthBadge(
+    bufferSeconds: Float,
+    modifier: Modifier = Modifier
+) {
+    val level = resolveBufferHealthLevel(bufferSeconds)
+    val dotColor by animateColorAsState(
+        targetValue = when (level) {
+            BufferHealthLevel.GOOD -> Color(0xFF4ADE80)
+            BufferHealthLevel.FAIR -> Color(0xFFFBBF24)
+            BufferHealthLevel.LOW -> Color(0xFFF87171)
+        },
+        animationSpec = tween(durationMillis = 250),
+        label = "bufferHealthDot"
+    )
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.34f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(dotColor)
+        )
+        Text(
+            text = stringResource(R.string.player_buffer_badge_label),
+            color = Color.White.copy(alpha = 0.66f),
+            fontSize = AppTypeScale.Caption,
+            fontWeight = FontWeight.Normal,
+            maxLines = 1
+        )
+        Text(
+            text = formatBufferHealthSeconds(bufferSeconds),
+            color = Color.White.copy(alpha = 0.92f),
+            fontSize = AppTypeScale.Caption,
+            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFeatureSettings = "tnum"
+            ),
+            maxLines = 1
+        )
     }
 }
