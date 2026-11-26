@@ -19,14 +19,12 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
-import android.database.ContentObserver
 import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
