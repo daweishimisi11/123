@@ -14,7 +14,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
+import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -86,7 +88,8 @@ internal data class VideoTrack(
     val trackIndex: Int,
     val height: Int,
     val bitrate: Int,
-    val label: String
+    val label: String,
+    val mediaTrackGroup: TrackGroup
 )
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -108,7 +111,16 @@ internal fun parseVideoTracks(tracks: Tracks): List<VideoTrack> {
                     append("Mbps")
                 }
             }
-            result.add(VideoTrack(groupIndex, trackIndex, height, bitrate, label))
+            result.add(
+                VideoTrack(
+                    groupIndex = groupIndex,
+                    trackIndex = trackIndex,
+                    height = height,
+                    bitrate = bitrate,
+                    label = label,
+                    mediaTrackGroup = group.mediaTrackGroup
+                )
+            )
         }
     }
     // 按清晰度从高到低排列
@@ -116,16 +128,23 @@ internal fun parseVideoTracks(tracks: Tracks): List<VideoTrack> {
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
-internal fun applyTrackSelection(player: ExoPlayer, track: VideoTrack?) {
-    val trackSelector = player.trackSelector as? DefaultTrackSelector ?: return
-    val builder = trackSelector.parameters.buildUpon()
+internal fun buildTrackSelectionParameters(
+    currentParameters: TrackSelectionParameters,
+    track: VideoTrack?
+): TrackSelectionParameters {
+    val builder = currentParameters.buildUpon()
     if (track == null) {
         builder.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
     } else {
-        val groups = trackSelector.currentMappedTrackInfo?.getTrackGroups(C.TRACK_TYPE_VIDEO)
-        val group = groups?.get(track.groupIndex) ?: return
-        val override = TrackSelectionOverride(group, listOf(track.trackIndex))
-        builder.setOverrideForType(override)
+        builder.setOverrideForType(
+            TrackSelectionOverride(track.mediaTrackGroup, listOf(track.trackIndex))
+        )
     }
-    trackSelector.parameters = builder.build()
+    return builder.build()
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun applyTrackSelection(player: ExoPlayer, track: VideoTrack?) {
+    val trackSelector = player.trackSelector as? DefaultTrackSelector ?: return
+    trackSelector.parameters = buildTrackSelectionParameters(trackSelector.parameters, track)
 }
