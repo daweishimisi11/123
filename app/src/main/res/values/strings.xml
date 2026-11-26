@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">123AV</string>
+    <string name="app_name">123</string>
 
     <!-- 底部导航 -->
     <string name="tab_home">首页</string>
@@ -166,7 +166,7 @@
     <string name="common_back">返回</string>
     <string name="about_more">更多</string>
     <string name="about_project">项目地址</string>
-    <string name="about_project_url">github.com/Discover999/123AV</string>
+    <string name="about_project_url">github.com/daweishimisi11/123AV</string>
     <string name="about_feedback">问题反馈</string>
     <string name="about_check_update">检查更新</string>
     <string name="about_checking">检查中…</string>

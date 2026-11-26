@@ -53,7 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val REPO_URL = "https://github.com/Discover999/123AV"
+private const val REPO_URL = "https://github.com/daweishimisi11/123AV"
 private const val ISSUES_URL = "$REPO_URL/issues"
 private const val RELEASES_URL = "$REPO_URL/releases/latest"
 
