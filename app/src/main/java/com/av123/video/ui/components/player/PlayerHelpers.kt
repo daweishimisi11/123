@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
@@ -40,6 +41,15 @@ internal enum class VerticalGestureSide {
 
 internal fun classifyVerticalGestureSide(startX: Float, widthPx: Float): VerticalGestureSide =
     if (startX < widthPx / 2f) VerticalGestureSide.BRIGHTNESS else VerticalGestureSide.VOLUME
+
+/**
+ * 竖滑调节指示条停靠在对侧，避免被调节手指遮挡并让出画面中心视野：
+ * 左侧滑调亮度时显示在右侧；右侧滑调音量时显示在左侧。
+ */
+internal fun gestureOverlayAlignment(side: VerticalGestureSide): Alignment = when (side) {
+    VerticalGestureSide.BRIGHTNESS -> Alignment.CenterEnd
+    VerticalGestureSide.VOLUME -> Alignment.CenterStart
+}
 
 internal fun computeDraggedBrightness(
     startBrightness: Float,

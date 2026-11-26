@@ -187,6 +187,9 @@ private const val FLIP_TO_EXIT_FACE_DOWN_Z = -7.0f
 /** 翻转退出：连续朝下的最短持续时间，避免翻转过程误触 */
 private const val FLIP_TO_EXIT_HOLD_MS = 500L
 
+/** 竖向滑动亮度/音量指示条在松手后的短暂停留时长（毫秒），便于确认最终数值 */
+private const val GESTURE_OVERLAY_LINGER_MS = 650L
+
 /**
  * 现代风格流媒体播放器。
  *
@@ -351,17 +354,26 @@ fun VideoPlayer(
     // 锁定态解锁键独立计时：锁上后短暂显示，超时隐藏；点画面重新唤出
     var isLockControlVisible by remember(player) { mutableStateOf(false) }
     var lockControlInteractionTick by remember { mutableIntStateOf(0) }
-    // 全屏左侧滑动亮度 / 右侧滑动音量状态
+    // 全屏左侧滑动亮度 / 右侧滑动音量状态（松手后短暂保留读数再淡出，方便确认最终百分比）
     var verticalGestureOverlay by remember { mutableStateOf<Pair<VerticalGestureSide, Float>?>(null) }
+    var verticalGestureVisible by remember { mutableStateOf(false) }
+    var verticalGestureReleaseTick by remember { mutableIntStateOf(0) }
     var hasAdjustedBrightness by remember { mutableStateOf(false) }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val currentFullscreen by rememberUpdatedState(isFullscreen)
+    LaunchedEffect(verticalGestureReleaseTick, verticalGestureVisible) {
+        if (verticalGestureVisible && verticalGestureReleaseTick > 0) {
+            delay(GESTURE_OVERLAY_LINGER_MS.milliseconds)
+            verticalGestureVisible = false
+        }
+    }
     LaunchedEffect(isFullscreen) {
         if (!isFullscreen) {
             isLocked = false
             isLockControlVisible = false
+            verticalGestureVisible = false
             verticalGestureOverlay = null
             if (hasAdjustedBrightness) {
                 activity?.window?.let { win ->
@@ -853,11 +865,11 @@ fun VideoPlayer(
                             }
                         },
                         onDragEnd = {
-                            verticalGestureOverlay = null
+                            if (active) verticalGestureReleaseTick++
                             active = false
                         },
                         onDragCancel = {
-                            verticalGestureOverlay = null
+                            if (active) verticalGestureReleaseTick++
                             active = false
                         },
                         onVerticalDrag = { _, dragAmount ->
@@ -865,6 +877,8 @@ fun VideoPlayer(
                                 return@detectVerticalDragGestures
                             }
                             active = true
+                            verticalGestureVisible = true
+                            verticalGestureReleaseTick = 0
                             accumulatedDy += dragAmount
                             val heightPx = size.height.toFloat().coerceAtLeast(1f)
                             if (gestureSide == VerticalGestureSide.BRIGHTNESS) {
@@ -1153,14 +1167,29 @@ fun VideoPlayer(
             LongPressSpeedBadge(speed = LONG_PRESS_SPEED)
         }
 
-        // 竖滑亮度/音量浮层：居中显示图标 + 进度条 + 百分比
+        // 竖滑亮度/音量浮层：停靠在操作对侧，带竖向进度条、百分比与松手淡出
         val gestureState = verticalGestureOverlay
-        if (gestureState != null && isFullscreen && error == null && !isInPip) {
-            GestureLevelOverlay(
-                side = gestureState.first,
-                fraction = gestureState.second,
-                modifier = Modifier.align(Alignment.Center)
-            )
+        AnimatedVisibility(
+            visible = gestureState != null &&
+                verticalGestureVisible &&
+                isFullscreen &&
+                error == null &&
+                !isInPip &&
+                !isLocked,
+            enter = fadeIn(Motion.Overlay) + scaleIn(Motion.Overlay, initialScale = 0.94f),
+            exit = fadeOut(Motion.Overlay),
+            modifier = gestureState?.let {
+                Modifier
+                    .align(gestureOverlayAlignment(it.first))
+                    .padding(horizontal = 36.dp)
+            } ?: Modifier.align(Alignment.Center)
+        ) {
+            if (gestureState != null) {
+                GestureLevelOverlay(
+                    side = gestureState.first,
+                    fraction = gestureState.second
+                )
+            }
         }
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -56,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -215,7 +217,8 @@ internal fun DoubleSeekFeedback(
 }
 
 /**
- * 全屏左侧上下滑动亮度 / 右侧上下滑动音量的居中百分比指示条。
+ * 全屏左侧上下滑动亮度 / 右侧上下滑动音量的对侧竖向指示条：
+ * 顶部百分比 + 中间自底向上平滑填充竖条 + 底部图标，玻璃质感深色胶囊不遮挡画面中央。
  */
 @Composable
 internal fun GestureLevelOverlay(
@@ -224,47 +227,63 @@ internal fun GestureLevelOverlay(
     modifier: Modifier = Modifier
 ) {
     val clamped = fraction.coerceIn(0f, 1f)
+    val animatedFraction by animateFloatAsState(
+        targetValue = clamped,
+        animationSpec = tween(durationMillis = 70, easing = LinearEasing),
+        label = "gestureLevelFraction"
+    )
     val percent = (clamped * 100f).roundToInt()
-    Row(
+    val shape = RoundedCornerShape(24.dp)
+    val fillBrush = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+        )
+    )
+    Column(
         modifier = modifier
-            .clip(AppShapes.ExtraLarge)
-            .background(Color.Black.copy(alpha = 0.65f))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+            .widthIn(min = 50.dp)
+            .clip(shape)
+            .background(Color(0xFF14161B).copy(alpha = 0.78f))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Text(
+            text = "$percent%",
+            color = Color.White,
+            fontSize = AppTypeScale.Caption,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
+        Box(
+            modifier = Modifier
+                .width(6.dp)
+                .height(104.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(animatedFraction)
+                    .clip(CircleShape)
+                    .background(fillBrush)
+            )
+        }
         if (side == VerticalGestureSide.BRIGHTNESS) {
             BrightnessSunIcon(modifier = Modifier.size(18.dp))
         } else {
             Icon(
                 imageVector = if (percent == 0) AppIcons.VolumeOff else AppIcons.VolumeUp,
                 contentDescription = null,
-                tint = Color.White,
+                tint = if (percent == 0) Color.White.copy(alpha = 0.65f) else Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
-        Box(
-            modifier = Modifier
-                .width(96.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.28f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(clamped)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
-        Text(
-            text = "$percent%",
-            color = Color.White,
-            fontSize = AppTypeScale.Label,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.widthIn(min = 36.dp),
-            textAlign = TextAlign.End
-        )
     }
 }
 

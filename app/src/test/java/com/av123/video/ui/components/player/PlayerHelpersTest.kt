@@ -1,6 +1,7 @@
 package com.av123.video.ui.components.player
 
 import android.media.AudioManager
+import androidx.compose.ui.Alignment
 import androidx.media3.common.Player
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +30,14 @@ class PlayerHelpersTest {
         assertEquals(
             VerticalGestureSide.VOLUME,
             classifyVerticalGestureSide(startX = 500f, widthPx = 1000f)
+        )
+        assertEquals(
+            Alignment.CenterEnd,
+            gestureOverlayAlignment(VerticalGestureSide.BRIGHTNESS)
+        )
+        assertEquals(
+            Alignment.CenterStart,
+            gestureOverlayAlignment(VerticalGestureSide.VOLUME)
         )
 
         val brightened = computeDraggedBrightness(

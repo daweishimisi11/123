@@ -43,4 +43,15 @@ class PlayerOverlaysTest {
         }
         composeRule.onNodeWithText("75%").assertIsDisplayed()
     }
+
+    @Test
+    fun gestureLevelOverlay_showsVolumePercentageAndZeroState() {
+        composeRule.setContent {
+            GestureLevelOverlay(
+                side = VerticalGestureSide.VOLUME,
+                fraction = 0f
+            )
+        }
+        composeRule.onNodeWithText("0%").assertIsDisplayed()
+    }
 }
