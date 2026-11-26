@@ -306,7 +306,6 @@
     <string name="player_episodes_n">选集%1$d</string>
     <string name="player_settings">设置</string>
     <string name="player_settings_title">播放设置</string>
-    <string name="player_speed_title">倍速</string>
     <string name="player_stats_group_video">视频</string>
     <string name="player_stats_group_audio">音频</string>
     <string name="player_stats_group_playback">播放</string>

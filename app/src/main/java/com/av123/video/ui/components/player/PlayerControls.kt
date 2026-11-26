@@ -224,10 +224,6 @@ internal fun PlayerControls(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showTrackSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
-    // 全屏改用右侧面板，锚定倍速弹层只在竖屏使用
-    LaunchedEffect(isFullscreen) {
-        if (isFullscreen) showSpeedSheet = false
-    }
     var showVolumePanel by remember { mutableStateOf(false) }
     var volume by remember {
         mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
@@ -529,8 +525,7 @@ internal fun PlayerControls(
                     TextButton(
                         onClick = {
                             haptics.tick()
-                            if (isFullscreen) showSettingsSheet = true
-                            else showSpeedSheet = true
+                            showSpeedSheet = true
                         },
                         shape = AppShapes.Large,
                         colors = ButtonDefaults.textButtonColors(
@@ -717,8 +712,6 @@ internal fun PlayerControls(
             SettingsSheet(
                 resizeMode = resizeMode,
                 onResizeModeChange = onResizeModeChange,
-                selectedSpeed = selectedSpeed,
-                onSpeedChange = onSpeedChange,
                 episodes = episodes,
                 selectedEpisodeIndex = selectedEpisodeIndex,
                 onSelectEpisode = onSelectEpisode,
@@ -737,15 +730,11 @@ internal fun PlayerControls(
 
 }
 
-private val SETTINGS_SPEED_OPTIONS = listOf(0.5f, 1f, 1.25f, 1.5f, 2f, 3f)
-
-/** 全屏设置：右侧滑出面板，B 站式标题 + 行式配置 */
+/** 全屏设置：右侧滑出面板，B 站式标题 + 行式配置（倍速由底部倍速按钮独立调节） */
 @Composable
-private fun SettingsSheet(
+internal fun SettingsSheet(
     resizeMode: ResizeModeOption,
     onResizeModeChange: (ResizeModeOption) -> Unit,
-    selectedSpeed: Float,
-    onSpeedChange: (Float) -> Unit,
     episodes: List<Episode>,
     selectedEpisodeIndex: Int,
     onSelectEpisode: (Int) -> Unit,
@@ -864,44 +853,6 @@ private fun SettingsSheet(
                         }
                         // 最后一行不足 4 个时用空位撑住，避免格子被拉宽
                         repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.player_speed_title),
-            color = Color.White.copy(alpha = 0.55f),
-            fontSize = AppTypeScale.Label
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SETTINGS_SPEED_OPTIONS.chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { speed ->
-                        val selected = speed == selectedSpeed
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clip(AppShapes.Small)
-                                .background(
-                                    if (selected) MaterialTheme.colorScheme.primary
-                                    else Color.White.copy(alpha = 0.08f)
-                                )
-                                .clickable { onSpeedChange(speed) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "${speed}x",
-                                color = if (selected) Color.White
-                                else Color.White.copy(alpha = 0.75f),
-                                fontSize = AppTypeScale.Label,
-                                fontWeight = if (selected) FontWeight.SemiBold
-                                else FontWeight.Normal,
-                                maxLines = 1
-                            )
-                        }
                     }
                 }
             }
