@@ -47,13 +47,13 @@ class PlayerControlsTest {
     }
 
     @Test
-    fun bufferHealthBadge_displaysLabelAndSeconds() {
+    fun bufferHealthBadge_displaysSecondsWithoutLabelText() {
         composeRule.setContent {
             BufferHealthBadge(bufferSeconds = 12.4f)
         }
 
-        composeRule.onNodeWithText("缓冲").assertIsDisplayed()
         composeRule.onNodeWithText("12.4s").assertIsDisplayed()
+        composeRule.onNodeWithText("缓冲").assertDoesNotExist()
     }
 
     @Test

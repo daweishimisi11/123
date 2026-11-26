@@ -60,21 +60,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -1225,9 +1220,9 @@ fun VideoPlayer(
             )
         }
 
-        // 全屏左上角单独的缓冲健康秒数胶囊（仅在开启开关且统计浮层未打开时展示）
+        // 全屏最左侧缓冲健康秒数胶囊（仅在开启开关且统计浮层未打开时紧贴左上边缘留白区）
         val bufferHealthTopPadding by animateDpAsState(
-            targetValue = if (isControllerVisible && !isLocked) 54.dp else 14.dp,
+            targetValue = if (isControllerVisible && !isLocked) 52.dp else 8.dp,
             animationSpec = tween(durationMillis = 180),
             label = "bufferHealthTopPadding"
         )
@@ -1241,8 +1236,7 @@ fun VideoPlayer(
             exit = fadeOut(Motion.Overlay),
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Start))
-                .padding(start = 16.dp, top = bufferHealthTopPadding)
+                .padding(start = 4.dp, top = bufferHealthTopPadding)
         ) {
             BufferHealthBadge(
                 bufferSeconds = computeBufferHealthSeconds(

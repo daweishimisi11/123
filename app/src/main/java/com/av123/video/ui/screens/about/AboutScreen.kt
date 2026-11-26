@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +59,51 @@ import kotlinx.coroutines.withContext
 private const val REPO_URL = "https://github.com/daweishimisi11/123"
 private const val ISSUES_URL = "$REPO_URL/issues"
 private const val RELEASES_URL = "$REPO_URL/releases/latest"
+private const val ALL_RELEASES_URL = "$REPO_URL/releases"
+
+/** 版本更新日志条目 */
+internal data class ChangelogEntry(
+    val version: String,
+    val highlights: List<String>
+)
+
+internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
+    ChangelogEntry(
+        version = "v0.2.4",
+        highlights = listOf(
+            "全屏左上角缓冲秒数胶囊移至最左侧边缘留白区并精简文字，避免遮挡视频画面",
+            "在「我的 → 版本」内新增更新日志入口，随时查看各版本变更记录"
+        )
+    ),
+    ChangelogEntry(
+        version = "v0.2.3",
+        highlights = listOf(
+            "新增全屏左上角常驻显示缓冲健康秒数的开关（「我的 → 播放」及全屏设置内可切换）"
+        )
+    ),
+    ChangelogEntry(
+        version = "v0.2.2",
+        highlights = listOf(
+            "拆分全屏「选集」与「设置」抽屉，点击选集仅打开剧集选择、设置内移除选集项",
+            "清晰度处于「自动」档时直接显示当前播放分辨率（如 480p / 720p / 1080p）"
+        )
+    ),
+    ChangelogEntry(
+        version = "v0.2.1",
+        highlights = listOf(
+            "详情页简介支持直接点击文字区域展开与收起",
+            "移除演员详情页姓名右侧重复的心形关注数胶囊，防止遮挡长姓名"
+        )
+    ),
+    ChangelogEntry(
+        version = "v0.2.0",
+        highlights = listOf(
+            "详情页支持有码与无码版本快捷跳转按钮",
+            "自适应调小竖屏详情页顶栏番号与下方标题字号",
+            "统一清理安装包产物与应用界面中的 AV 标识"
+        )
+    )
+)
 
 /** 检查更新的结果弹窗；[link] 为空表示只有一句结论 */
 private data class UpdateDialog(val title: String, val link: String?)
@@ -78,6 +126,7 @@ fun AboutSheet(onDismiss: () -> Unit) {
     }
     var checking by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<UpdateDialog?>(null) }
+    var showChangelog by remember { mutableStateOf(false) }
 
     fun checkUpdate() {
         if (checking) return
@@ -179,6 +228,18 @@ fun AboutSheet(onDismiss: () -> Unit) {
                     .background(appCardContainerColor())
             ) {
                 AboutLinkRow(
+                    icon = AppIcons.HistoryOutline,
+                    title = stringResource(R.string.about_changelog),
+                    subtitle = stringResource(R.string.about_changelog_subtitle)
+                ) {
+                    haptics.tick()
+                    showChangelog = true
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 66.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                AboutLinkRow(
                     icon = AppIcons.Public,
                     title = stringResource(R.string.about_project),
                     subtitle = stringResource(R.string.about_project_url)
@@ -245,6 +306,85 @@ fun AboutSheet(onDismiss: () -> Unit) {
                                 )
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showChangelog) {
+        ChangelogDialog(
+            entries = APP_CHANGELOG,
+            onOpenReleases = {
+                showChangelog = false
+                uriHandler.openUri(ALL_RELEASES_URL)
+            },
+            onDismiss = { showChangelog = false }
+        )
+    }
+}
+
+@Composable
+internal fun ChangelogDialog(
+    entries: List<ChangelogEntry>,
+    onOpenReleases: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = AppShapes.ExtraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp, bottom = 10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.about_changelog),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    entries.forEachIndexed { index, entry ->
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AboutBadge(text = entry.version, accent = index == 0)
+                            entry.highlights.forEach { item ->
+                                Text(
+                                    text = "• $item",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (index < entries.lastIndex) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onOpenReleases) {
+                        Text(stringResource(R.string.about_changelog_releases))
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.common_close))
                     }
                 }
             }

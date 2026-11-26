@@ -226,6 +226,9 @@
     <string name="profile_probe_unknown">未知</string>
     <string name="profile_probe_ip_failed">IP 信息获取失败</string>
     <string name="profile_about_version">版本</string>
+    <string name="about_changelog">更新日志</string>
+    <string name="about_changelog_subtitle">查看各版本功能新增与修复记录</string>
+    <string name="about_changelog_releases">全部版本</string>
     <string name="profile_about_dialog_title">应用说明</string>
     <string name="about_disclaimer_scope_title">使用范围</string>
     <string name="about_disclaimer_scope_body">本应用为个人学习与研究项目，代码由 AI 生成，仅用于 Android 技术学习与交流。禁止商业用途与违法活动，使用时应遵守所在地法律；禁止未成年人使用。</string>
@@ -530,7 +533,6 @@
     <string name="player_stat_audio_sample_rate">音频采样率</string>
     <string name="player_stat_audio_channels">音频声道</string>
     <string name="player_stat_buffer_health">缓冲健康</string>
-    <string name="player_buffer_badge_label">缓冲</string>
     <string name="player_settings_buffer_health">左上角缓冲秒数</string>
     <string name="profile_show_buffer_health">左上角显示缓冲健康</string>
     <string name="profile_show_buffer_health_desc">全屏播放时在左上角常驻显示当前可播缓冲秒数</string>

@@ -441,8 +441,8 @@ internal fun ErrorOverlay(
 
 /**
  * 全屏左上角轻量级缓冲健康胶囊：
- * 仅在超宽手机全屏观影时停靠左上留白区，以状态小圆点 + 等宽数字秒数自然呈现在画面边角，
- * 不抢视线、数字变化无横向抖动。
+ * 紧贴屏幕最左侧留白区展示状态小圆点 + 等宽数字秒数（如 12.4s），
+ * 体积尽量精简，避免侵占 16:9 视频画面区域。
  */
 @Composable
 internal fun BufferHealthBadge(
@@ -464,22 +464,15 @@ internal fun BufferHealthBadge(
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.34f))
             .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape)
-            .padding(horizontal = 9.dp, vertical = 4.dp),
+            .padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
+                .size(5.dp)
                 .clip(CircleShape)
                 .background(dotColor)
-        )
-        Text(
-            text = stringResource(R.string.player_buffer_badge_label),
-            color = Color.White.copy(alpha = 0.66f),
-            fontSize = AppTypeScale.Caption,
-            fontWeight = FontWeight.Normal,
-            maxLines = 1
         )
         Text(
             text = formatBufferHealthSeconds(bufferSeconds),
