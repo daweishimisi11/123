@@ -108,6 +108,8 @@
     <string name="favorites_delete_selected">删除所选</string>
     <string name="favorites_deleted_multi">已取消 %1$d 个收藏</string>
     <string name="favorites_deleted_single">已取消收藏</string>
+    <string name="favorites_removed_from_group_multi">已从当前收藏夹移出 %1$d 个视频</string>
+    <string name="favorites_removed_from_group_single">已从当前收藏夹移出</string>
     <string name="favorites_undo">撤销</string>
     <!-- 收藏分组（收藏夹） -->
     <string name="favorites_new_group">新建收藏夹</string>

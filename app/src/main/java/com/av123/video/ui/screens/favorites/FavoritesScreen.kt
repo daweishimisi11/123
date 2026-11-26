@@ -188,24 +188,43 @@ fun FavoritesScreen(
                         },
                         onDelete = {
                             val deletedIds = selectedIds
-                            val deleted = visibleRecords.filter { it.video.id in deletedIds }
-                            // 删除会级联清掉分组关系：先快照，撤销时一并写回
-                            val deletedMemberships =
-                                state.groupItems.filter { it.videoId in deletedIds }
-                            viewModel.delete(deletedIds)
                             exitSelection()
-                            scope.launch {
-                                val result = snackbarHostState.showAppSnackbar(
-                                    message = resources.getString(
-                                        R.string.favorites_deleted_multi, deleted.size
-                                    ),
-                                    tone = SnackbarTone.Removal,
-                                    actionLabel = resources.getString(R.string.favorites_undo),
-                                    withDismissAction = true,
-                                    duration = SnackbarDuration.Short
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    viewModel.restore(deleted, deletedMemberships)
+                            if (groupFilter != null) {
+                                viewModel.removeFromGroup(groupFilter.groupId, deletedIds)
+                                scope.launch {
+                                    val result = snackbarHostState.showAppSnackbar(
+                                        message = resources.getString(
+                                            R.string.favorites_removed_from_group_multi,
+                                            deletedIds.size
+                                        ),
+                                        tone = SnackbarTone.Removal,
+                                        actionLabel = resources.getString(R.string.favorites_undo),
+                                        withDismissAction = true,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.addToGroup(groupFilter.groupId, deletedIds)
+                                    }
+                                }
+                            } else {
+                                val deleted = visibleRecords.filter { it.video.id in deletedIds }
+                                // 删除会级联清掉分组关系：先快照，撤销时一并写回
+                                val deletedMemberships =
+                                    state.groupItems.filter { it.videoId in deletedIds }
+                                viewModel.delete(deletedIds)
+                                scope.launch {
+                                    val result = snackbarHostState.showAppSnackbar(
+                                        message = resources.getString(
+                                            R.string.favorites_deleted_multi, deleted.size
+                                        ),
+                                        tone = SnackbarTone.Removal,
+                                        actionLabel = resources.getString(R.string.favorites_undo),
+                                        withDismissAction = true,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.restore(deleted, deletedMemberships)
+                                    }
                                 }
                             }
                         },
@@ -302,22 +321,47 @@ fun FavoritesScreen(
                         onVideoClick = onVideoClick,
                         listLayout = listLayout,
                         onSwipeDelete = { record ->
-                            // 删除会级联清掉分组关系：先快照，撤销时一并写回
-                            val removedMemberships =
-                                state.groupItems.filter { it.videoId == record.video.id }
-                            viewModel.delete(setOf(record.video.id))
-                            scope.launch {
-                                val result = snackbarHostState.showAppSnackbar(
-                                    message = resources.getString(
-                                        R.string.favorites_deleted_single
-                                    ),
-                                    tone = SnackbarTone.Removal,
-                                    actionLabel = resources.getString(R.string.favorites_undo),
-                                    withDismissAction = true,
-                                    duration = SnackbarDuration.Short
+                            val groupFilter = dest.filter as? FavoritesFilter.Group
+                            if (groupFilter != null) {
+                                viewModel.removeFromGroup(
+                                    groupFilter.groupId,
+                                    listOf(record.video.id)
                                 )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    viewModel.restore(listOf(record), removedMemberships)
+                                scope.launch {
+                                    val result = snackbarHostState.showAppSnackbar(
+                                        message = resources.getString(
+                                            R.string.favorites_removed_from_group_single
+                                        ),
+                                        tone = SnackbarTone.Removal,
+                                        actionLabel = resources.getString(R.string.favorites_undo),
+                                        withDismissAction = true,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.addToGroup(
+                                            groupFilter.groupId,
+                                            listOf(record.video.id)
+                                        )
+                                    }
+                                }
+                            } else {
+                                // 删除会级联清掉分组关系：先快照，撤销时一并写回
+                                val removedMemberships =
+                                    state.groupItems.filter { it.videoId == record.video.id }
+                                viewModel.delete(setOf(record.video.id))
+                                scope.launch {
+                                    val result = snackbarHostState.showAppSnackbar(
+                                        message = resources.getString(
+                                            R.string.favorites_deleted_single
+                                        ),
+                                        tone = SnackbarTone.Removal,
+                                        actionLabel = resources.getString(R.string.favorites_undo),
+                                        withDismissAction = true,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.restore(listOf(record), removedMemberships)
+                                    }
                                 }
                             }
                         },
