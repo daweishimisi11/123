@@ -91,13 +91,18 @@ object MediaCache {
 
     /**
      * 清理媒体缓存。正在播放（含画中画）时直接放弃，返回 false；
-     * 无播放器时释放 SimpleCache、删除缓存目录，返回 true。
+     * 无播放器时释放 SimpleCache、同步清空磁盘分片与 StandaloneDatabaseProvider 索引表，返回 true。
      */
     @Synchronized
     fun tryClear(context: Context): Boolean {
         if (activePlayers.get() > 0) return false
         releaseLocked()
-        File(context.applicationContext.cacheDir, CACHE_DIR_NAME).deleteRecursively()
+        val appContext = context.applicationContext
+        val cacheDir = File(appContext.cacheDir, CACHE_DIR_NAME)
+        runCatching {
+            SimpleCache.delete(cacheDir, StandaloneDatabaseProvider(appContext))
+        }
+        cacheDir.deleteRecursively()
         return true
     }
 
