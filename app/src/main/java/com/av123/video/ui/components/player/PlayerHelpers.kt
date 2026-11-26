@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
@@ -221,3 +222,25 @@ internal const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM
 internal fun isMusicVolumeBroadcast(action: String?, streamType: Int): Boolean =
     (action == ACTION_VOLUME_CHANGED || action == ACTION_STREAM_MUTE_CHANGED) &&
         (streamType == -1 || streamType == AudioManager.STREAM_MUSIC)
+
+/**
+ * 判断播放器当前是否应保持屏幕常亮：
+ * - 正常播放中保持常亮，防止长时间观影触发息屏或锁屏；
+ * - 全屏状态下缓冲等待时同样保持常亮，避免缓冲期间黑屏；
+ * - 暂停、播放结束、出错或进入画中画时释放常亮标志。
+ */
+internal fun shouldKeepScreenOn(
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int,
+    isFullscreen: Boolean,
+    isInPip: Boolean,
+    hasError: Boolean
+): Boolean {
+    if (isInPip || hasError) return false
+    if (isPlaying) return true
+    return isFullscreen &&
+        playWhenReady &&
+        playbackState != Player.STATE_ENDED &&
+        playbackState != Player.STATE_IDLE
+}

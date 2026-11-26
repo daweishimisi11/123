@@ -1,6 +1,7 @@
 package com.av123.video.ui.components.player
 
 import android.media.AudioManager
+import androidx.media3.common.Player
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -71,5 +72,69 @@ class PlayerHelpersTest {
         assertTrue(isMusicVolumeBroadcast(ACTION_VOLUME_CHANGED, -1))
         assertFalse(isMusicVolumeBroadcast(ACTION_VOLUME_CHANGED, AudioManager.STREAM_RING))
         assertFalse(isMusicVolumeBroadcast("android.intent.action.OTHER", AudioManager.STREAM_MUSIC))
+    }
+
+    @Test
+    fun `shouldKeepScreenOn keeps screen awake during active or fullscreen buffering playback`() {
+        assertTrue(
+            shouldKeepScreenOn(
+                isPlaying = true,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY,
+                isFullscreen = true,
+                isInPip = false,
+                hasError = false
+            )
+        )
+        assertTrue(
+            shouldKeepScreenOn(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING,
+                isFullscreen = true,
+                isInPip = false,
+                hasError = false
+            )
+        )
+        assertFalse(
+            shouldKeepScreenOn(
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY,
+                isFullscreen = true,
+                isInPip = false,
+                hasError = false
+            )
+        )
+        assertFalse(
+            shouldKeepScreenOn(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_ENDED,
+                isFullscreen = true,
+                isInPip = false,
+                hasError = false
+            )
+        )
+        assertFalse(
+            shouldKeepScreenOn(
+                isPlaying = true,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY,
+                isFullscreen = true,
+                isInPip = true,
+                hasError = false
+            )
+        )
+        assertFalse(
+            shouldKeepScreenOn(
+                isPlaying = true,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY,
+                isFullscreen = true,
+                isInPip = false,
+                hasError = true
+            )
+        )
     }
 }

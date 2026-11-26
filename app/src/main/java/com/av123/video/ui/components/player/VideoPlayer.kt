@@ -312,7 +312,8 @@ fun VideoPlayer(
 
     // 播放器状态聚合
     // 全部以 player 为 key：换源会换一个播放器实例，旧实例的读数不能残留
-    var isPlaying by remember(player) { mutableStateOf(player.playWhenReady) }
+    var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
+    var playWhenReady by remember(player) { mutableStateOf(player.playWhenReady) }
     var playbackState by remember(player) { mutableIntStateOf(player.playbackState) }
     var position by remember(player) { mutableLongStateOf(player.currentPosition) }
     var duration by remember(player) { mutableLongStateOf(player.duration.coerceAtLeast(0L)) }
@@ -386,6 +387,27 @@ fun VideoPlayer(
 
     val mainActivity = activity as? MainActivity
 
+    // 全屏/播放期间保持屏幕常亮，避免长时间观影自动息屏或锁屏；暂停、结束、出错或进入小窗时释放
+    val keepScreenOn = shouldKeepScreenOn(
+        isPlaying = isPlaying,
+        playWhenReady = playWhenReady,
+        playbackState = playbackState,
+        isFullscreen = isFullscreen,
+        isInPip = isInPip,
+        hasError = error != null
+    )
+    DisposableEffect(activity, keepScreenOn) {
+        val window = activity?.window
+        if (window != null && keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // 画中画：向 Activity 注册准入判断与模式变化监听（受用户设置开关控制）
     DisposableEffect(mainActivity) {
         if (mainActivity != null) {
@@ -439,6 +461,10 @@ fun VideoPlayer(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+            }
+
+            override fun onPlayWhenReadyChanged(ready: Boolean, reason: Int) {
+                playWhenReady = ready
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -639,6 +665,7 @@ fun VideoPlayer(
                     useController = false
                     // 参数名 resizeMode 与 PlayerView 属性同名，显式 this 消歧
                     this.resizeMode = resizeMode.toMedia3ResizeMode()
+                    this.keepScreenOn = keepScreenOn
                     this.player = player
                 }.also { playerViewHolder[0] = it }
             },
@@ -648,12 +675,14 @@ fun VideoPlayer(
             // 而新实例照样回调 READY——换回播过的集会一直卡住（2026-10-23）
             update = { playerView ->
                 playerView.resizeMode = resizeMode.toMedia3ResizeMode()
+                playerView.keepScreenOn = keepScreenOn
                 if (playerView.player !== player) playerView.player = player
             },
             // 离开组合（如全屏/竖屏切换导致分支重建）时解绑 player，
             // 避免销毁的 PlayerView 继续持有 surface；重建时由 factory 重新绑定
             onRelease = {
                 playerViewHolder[0] = null
+                it.keepScreenOn = false
                 it.player = null
             },
             modifier = Modifier.fillMaxSize()
