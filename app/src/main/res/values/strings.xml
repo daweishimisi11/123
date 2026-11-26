@@ -400,6 +400,7 @@
     <string name="profile_import_failed">导入失败：%1$s</string>
     <string name="profile_group_security">隐私与安全</string>
     <string name="profile_app_lock">应用锁</string>
+    <string name="profile_app_lock_disable_verify">验证身份以关闭应用锁</string>
     <string name="profile_app_lock_desc">冷启动或离开后通过指纹、面容或屏幕锁验证</string>
     <string name="profile_app_lock_relock">自动重新上锁</string>
     <string name="profile_secure_screen">防截屏</string>

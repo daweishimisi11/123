@@ -97,6 +97,22 @@ internal fun authenticateAppLock(
     prompt.authenticate(info)
 }
 
+internal enum class AppLockToggleAction {
+    REQUIRE_AUTH,
+    DISABLE_DIRECT,
+    SHOW_UNAVAILABLE
+}
+
+/** 切换应用锁开关前的决策：开启/关闭均先走系统验证；无凭据时开启提示不可用、关闭允许兜底解除 */
+internal fun resolveAppLockToggleAction(
+    targetEnabled: Boolean,
+    canAuthenticate: Boolean
+): AppLockToggleAction = when {
+    canAuthenticate -> AppLockToggleAction.REQUIRE_AUTH
+    targetEnabled -> AppLockToggleAction.SHOW_UNAVAILABLE
+    else -> AppLockToggleAction.DISABLE_DIRECT
+}
+
 /** 计算离开后台时长是否达到重新锁定阈值 */
 internal fun shouldRelockAfterBackground(awayMs: Long, relockAfterMs: Long): Boolean =
     relockAfterMs <= 0L || awayMs >= relockAfterMs

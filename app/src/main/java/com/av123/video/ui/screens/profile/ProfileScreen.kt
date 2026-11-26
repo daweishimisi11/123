@@ -71,8 +71,10 @@ import com.av123.video.data.prefs.AppLockTimeout
 import com.av123.video.data.prefs.DarkMode
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
+import com.av123.video.ui.lock.AppLockToggleAction
 import com.av123.video.ui.lock.authenticateAppLock
 import com.av123.video.ui.lock.canAuthenticateAppLock
+import com.av123.video.ui.lock.resolveAppLockToggleAction
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatWatchDurationMs
 import com.av123.video.ui.util.rememberAppHaptics
@@ -379,35 +381,33 @@ fun ProfileScreen(
                             HapticSwitch(
                                 checked = settings.appLockEnabled,
                                 onCheckedChange = { enabled ->
-                                    if (!enabled) {
-                                        // 关闭无需验证，立即生效（仅影响下次冷启动）
-                                        scope.launch {
+                                    val activity =
+                                        context.findActivity() as? FragmentActivity
+                                    val canAuth =
+                                        activity != null && canAuthenticateAppLock(activity)
+                                    when (resolveAppLockToggleAction(enabled, canAuth)) {
+                                        AppLockToggleAction.SHOW_UNAVAILABLE ->
+                                            showLockUnavailableDialog = true
+
+                                        AppLockToggleAction.DISABLE_DIRECT -> scope.launch {
                                             container.settingsStore.setAppLockEnabled(false)
                                         }
-                                    } else {
-                                        // 开启前：必须存在可用凭据，且本人验证通过才置位
-                                        val activity =
-                                            context.findActivity() as? FragmentActivity
-                                        if (activity == null ||
-                                            !canAuthenticateAppLock(activity)
-                                        ) {
-                                            showLockUnavailableDialog = true
-                                            return@HapticSwitch
-                                        }
-                                        authenticateAppLock(
-                                            activity = activity,
+
+                                        AppLockToggleAction.REQUIRE_AUTH -> authenticateAppLock(
+                                            activity = activity!!,
                                             title = resources.getString(
                                                 R.string.app_lock_prompt_title
                                             ),
                                             subtitle = resources.getString(
-                                                R.string.profile_app_lock
+                                                if (enabled) R.string.profile_app_lock
+                                                else R.string.profile_app_lock_disable_verify
                                             ),
                                             onSuccess = {
                                                 scope.launch {
-                                                    container.settingsStore.setAppLockEnabled(true)
+                                                    container.settingsStore.setAppLockEnabled(enabled)
                                                 }
                                             },
-                                            // 取消/失败：开关保持关闭（绑定状态，不乐观更新）
+                                            // 取消/失败：开关保持原状态（不乐观更新）
                                             onError = { _, _ -> }
                                         )
                                     }
