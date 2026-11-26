@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
  */
 object UpdateChecker {
 
-    private const val REPO = "Discover999/123AV"
+    private const val REPO = "daweishimisi11/123AV"
     private const val API = "https://api.github.com/repos/$REPO/releases/latest"
     private const val ATOM = "https://github.com/$REPO/releases.atom"
     private const val USER_AGENT = "123AV (Android)"
