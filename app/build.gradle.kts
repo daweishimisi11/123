@@ -15,7 +15,7 @@ val appVersionName = providers.gradleProperty("versionName").orNull
 // 远程站点配置地址；默认指向仓库内的 assets JSON，可用 -PsiteConfigUrl= 覆盖，
 // 传空字符串可完全关闭远程刷新。
 val siteConfigUrl = providers.gradleProperty("siteConfigUrl").orNull
-    ?: "https://raw.githubusercontent.com/daweishimisi11/123AV/main/app/src/main/assets/site-config.json"
+    ?: "https://raw.githubusercontent.com/daweishimisi11/123/main/app/src/main/assets/site-config.json"
 val escapedSiteConfigUrl = siteConfigUrl.replace("\\", "\\\\").replace("\"", "\\\"")
 
 // Release 签名凭据：优先读环境变量（GitHub Actions 等 CI 环境），
