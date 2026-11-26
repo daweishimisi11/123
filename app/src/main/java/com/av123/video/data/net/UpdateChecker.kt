@@ -101,16 +101,56 @@ object UpdateChecker {
         }
     }
 
-    /** 比较 "0.1.12" 与 "0.1.9" 这类点分版本串；无法解析时按「不是新版」处理 */
+    private data class ParsedVersion(
+        val core: List<Int>,
+        val suffix: String?
+    )
+
+    private fun parseVersion(raw: String): ParsedVersion? {
+        val cleaned = raw.trim().trimStart('v', 'V').substringBefore('+')
+        if (cleaned.isEmpty()) return null
+        val dashIndex = cleaned.indexOf('-')
+        val corePart = if (dashIndex >= 0) cleaned.substring(0, dashIndex) else cleaned
+        val suffixPart =
+            if (dashIndex >= 0) cleaned.substring(dashIndex + 1).ifBlank { null } else null
+        val coreNums = corePart.split('.').map { it.toIntOrNull() ?: return null }
+        if (coreNums.isEmpty()) return null
+        return ParsedVersion(coreNums, suffixPart)
+    }
+
+    private fun compareSuffix(a: String, b: String): Int {
+        val partsA = a.split('.')
+        val partsB = b.split('.')
+        for (i in 0 until maxOf(partsA.size, partsB.size)) {
+            val segA = partsA.getOrNull(i) ?: return -1
+            val segB = partsB.getOrNull(i) ?: return 1
+            val numA = segA.toIntOrNull()
+            val numB = segB.toIntOrNull()
+            val cmp = when {
+                numA != null && numB != null -> numA.compareTo(numB)
+                else -> segA.compareTo(segB, ignoreCase = true)
+            }
+            if (cmp != 0) return cmp
+        }
+        return 0
+    }
+
+    /** 比较 "v0.1.12" 与 "0.1.9" 等语义化版本串；无法解析时按「不是新版」处理 */
     fun isNewer(latest: String, current: String): Boolean {
-        val a = latest.split('.').mapNotNull { it.toIntOrNull() }
-        val b = current.split('.').mapNotNull { it.toIntOrNull() }
-        if (a.isEmpty() || b.isEmpty()) return false
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val x = a.getOrElse(i) { 0 }
-            val y = b.getOrElse(i) { 0 }
+        val a = parseVersion(latest) ?: return false
+        val b = parseVersion(current) ?: return false
+        for (i in 0 until maxOf(a.core.size, b.core.size)) {
+            val x = a.core.getOrElse(i) { 0 }
+            val y = b.core.getOrElse(i) { 0 }
             if (x != y) return x > y
         }
-        return false
+        val sufA = a.suffix
+        val sufB = b.suffix
+        return when {
+            sufA == null && sufB == null -> false
+            sufA == null && sufB != null -> true
+            sufA != null && sufB == null -> false
+            else -> compareSuffix(sufA!!, sufB!!) > 0
+        }
     }
 }
