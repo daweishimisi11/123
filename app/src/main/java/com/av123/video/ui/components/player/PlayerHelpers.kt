@@ -282,3 +282,32 @@ internal fun shouldKeepScreenOn(
         playbackState != Player.STATE_ENDED &&
         playbackState != Player.STATE_IDLE
 }
+
+internal sealed interface VolumeMuteAction {
+    data object MuteStream : VolumeMuteAction
+    data class Unmute(val restoreVolume: Int?) : VolumeMuteAction
+}
+
+/**
+ * 计算右下角音量按钮点击时的静音切换动作：
+ * - 非静音且音量 > 0 时静音媒体流；
+ * - 已静音或音量归零时取消静音，若当前系统音量为 0 则恢复至此前非零音量（或安全默认音量）。
+ */
+internal fun resolveVolumeMuteToggle(
+    currentVolume: Int,
+    isMuted: Boolean,
+    lastNonZeroVolume: Int,
+    maxVolume: Int
+): VolumeMuteAction {
+    val effectivelyMuted = isMuted || currentVolume <= 0
+    if (!effectivelyMuted) return VolumeMuteAction.MuteStream
+    if (currentVolume > 0) return VolumeMuteAction.Unmute(restoreVolume = null)
+    val safeMax = maxVolume.coerceAtLeast(1)
+    val fallbackVolume = (safeMax / 3).coerceAtLeast(1)
+    val target = if (lastNonZeroVolume > 0) {
+        lastNonZeroVolume.coerceIn(1, safeMax)
+    } else {
+        fallbackVolume
+    }
+    return VolumeMuteAction.Unmute(restoreVolume = target)
+}

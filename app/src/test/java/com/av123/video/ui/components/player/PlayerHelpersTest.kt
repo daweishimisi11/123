@@ -213,4 +213,44 @@ class PlayerHelpersTest {
         assertEquals("+12s", formatSeekDeltaSeconds(60_000L, 72_000L))
         assertEquals("-8s", formatSeekDeltaSeconds(60_000L, 52_000L))
     }
+
+    @Test
+    fun `resolveVolumeMuteToggle mutes active audio and restores previous volume on unmute`() {
+        assertEquals(
+            VolumeMuteAction.MuteStream,
+            resolveVolumeMuteToggle(
+                currentVolume = 8,
+                isMuted = false,
+                lastNonZeroVolume = 8,
+                maxVolume = 15
+            )
+        )
+        assertEquals(
+            VolumeMuteAction.Unmute(restoreVolume = null),
+            resolveVolumeMuteToggle(
+                currentVolume = 8,
+                isMuted = true,
+                lastNonZeroVolume = 8,
+                maxVolume = 15
+            )
+        )
+        assertEquals(
+            VolumeMuteAction.Unmute(restoreVolume = 8),
+            resolveVolumeMuteToggle(
+                currentVolume = 0,
+                isMuted = true,
+                lastNonZeroVolume = 8,
+                maxVolume = 15
+            )
+        )
+        assertEquals(
+            VolumeMuteAction.Unmute(restoreVolume = 5),
+            resolveVolumeMuteToggle(
+                currentVolume = 0,
+                isMuted = false,
+                lastNonZeroVolume = 0,
+                maxVolume = 15
+            )
+        )
+    }
 }

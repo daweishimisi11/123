@@ -129,8 +129,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -224,15 +222,21 @@ internal fun PlayerControls(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showTrackSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
-    var showVolumePanel by remember { mutableStateOf(false) }
     var volume by remember {
         mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
+    }
+    var lastNonZeroVolume by remember {
+        mutableIntStateOf(volume.coerceAtLeast(0))
     }
     var isMuted by remember {
         mutableStateOf(audioManager.isStreamMute(AudioManager.STREAM_MUSIC))
     }
 
-    // 监听系统媒体音量与静音广播（兼容 Android 9+ 物理音量键变化），实时同步图标与音量条
+    LaunchedEffect(volume) {
+        if (volume > 0) lastNonZeroVolume = volume
+    }
+
+    // 监听系统媒体音量与静音广播（兼容 Android 9+ 物理音量键变化），实时同步静音图标
     DisposableEffect(audioManager, context) {
         val syncVolume = {
             volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -264,18 +268,10 @@ internal fun PlayerControls(
 
     val effectivelyMuted = isMuted || volume == 0
 
-    LaunchedEffect(showSpeedSheet, showTrackSheet, showSettingsSheet, showVolumePanel) {
+    LaunchedEffect(showSpeedSheet, showTrackSheet, showSettingsSheet) {
         onControlPopupVisibleChange(
-            showSpeedSheet || showTrackSheet || showSettingsSheet || showVolumePanel
+            showSpeedSheet || showTrackSheet || showSettingsSheet
         )
-    }
-
-    // 音量条显示后自动隐藏，拖动改变音量时重置计时
-    LaunchedEffect(showVolumePanel, volume) {
-        if (showVolumePanel) {
-            delay(2_000L.milliseconds)
-            showVolumePanel = false
-        }
     }
 
     // 全屏顶栏状态胶囊：时间 / 网络 / 电量
@@ -618,52 +614,54 @@ internal fun PlayerControls(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                Box {
-                    IconButton(
-                        onClick = {
-                            // 点击音量按钮仅弹出音量调节面板，不直接静音；
-                            // 静音/音量通过弹出的音量条操作
-                            haptics.tick()
-                            showVolumePanel = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (effectivelyMuted) AppIcons.VolumeOff else AppIcons.VolumeUp,
-                            contentDescription = if (effectivelyMuted) unmuteDescription else muteDescription,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // 音量条：以音量按钮为锚点弹出，水平居中于图标、浮于控制栏上方
-                    if (showVolumePanel) {
-                        val panelOffsetY = with(LocalDensity.current) { (-52).dp.roundToPx() }
-                        Popup(
-                            alignment = Alignment.BottomCenter,
-                            offset = IntOffset(0, panelOffsetY),
-                            onDismissRequest = { showVolumePanel = false },
-                            properties = PopupProperties(focusable = false)
-                        ) {
-                            VolumePanel(
-                                volume = volume,
-                                maxVolume = maxVolume,
-                                isMuted = effectivelyMuted,
-                                onVolumeChange = { newVolume ->
-                                    volume = newVolume
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
-                                    if (newVolume > 0 && isMuted) {
-                                        audioManager.adjustStreamVolume(
-                                            AudioManager.STREAM_MUSIC,
-                                            AudioManager.ADJUST_UNMUTE,
-                                            0
-                                        )
-                                        isMuted = false
-                                    }
-                                }
+                IconButton(
+                    onClick = {
+                        // 点击音量按钮直接切换静音 / 取消静音；具体音量大小由全屏右侧上下滑动手势调节
+                        haptics.tick()
+                        when (
+                            val action = resolveVolumeMuteToggle(
+                                currentVolume = volume,
+                                isMuted = isMuted,
+                                lastNonZeroVolume = lastNonZeroVolume,
+                                maxVolume = maxVolume
                             )
+                        ) {
+                            VolumeMuteAction.MuteStream -> {
+                                if (volume > 0) lastNonZeroVolume = volume
+                                audioManager.adjustStreamVolume(
+                                    AudioManager.STREAM_MUSIC,
+                                    AudioManager.ADJUST_MUTE,
+                                    0
+                                )
+                                isMuted = true
+                            }
+
+                            is VolumeMuteAction.Unmute -> {
+                                audioManager.adjustStreamVolume(
+                                    AudioManager.STREAM_MUSIC,
+                                    AudioManager.ADJUST_UNMUTE,
+                                    0
+                                )
+                                action.restoreVolume?.let { restored ->
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        restored,
+                                        0
+                                    )
+                                    volume = restored
+                                }
+                                isMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+                            }
                         }
-                    }
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (effectivelyMuted) AppIcons.VolumeOff else AppIcons.VolumeUp,
+                        contentDescription = if (effectivelyMuted) unmuteDescription else muteDescription,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 IconButton(
