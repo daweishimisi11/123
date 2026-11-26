@@ -581,6 +581,7 @@ internal fun PlayerArea(
             onFullscreenChange = onFullscreenChange,
             onPlaybackReady = onPlaybackReady,
             onPlaybackError = onPlaybackError,
+            onReResolve = onRetry,
             startPositionMs = startPositionMs,
             episodeIndex = selectedEpisodeIndex,
             episodes = episodes,

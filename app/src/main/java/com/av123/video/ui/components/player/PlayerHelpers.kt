@@ -14,11 +14,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -148,3 +150,29 @@ internal fun applyTrackSelection(player: ExoPlayer, track: VideoTrack?) {
     val trackSelector = player.trackSelector as? DefaultTrackSelector ?: return
     trackSelector.parameters = buildTrackSelectionParameters(trackSelector.parameters, track)
 }
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun extractHttpResponseCode(error: Throwable?): Int? =
+    generateSequence(error) { it.cause }
+        .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+        .firstOrNull()
+        ?.responseCode
+
+/**
+ * 判断播放错误层点击重试时是否应重建抓流源而非重复 prepare 同一失效 URL：
+ * - HTTP 4xx（除 429 限流外，如 403 签名过期 / 404 不存在）立即重新抓流；
+ * - 其余错误允许原地重连一次，再次失败后再重新抓流，避免陷入死循环。
+ */
+internal fun shouldReResolveOnError(
+    httpStatusCode: Int?,
+    retryAttempts: Int
+): Boolean {
+    if (retryAttempts > 0) return true
+    return httpStatusCode != null && httpStatusCode != 429 && httpStatusCode in 400..499
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun shouldReResolveOnError(
+    error: PlaybackException?,
+    retryAttempts: Int
+): Boolean = shouldReResolveOnError(extractHttpResponseCode(error), retryAttempts)

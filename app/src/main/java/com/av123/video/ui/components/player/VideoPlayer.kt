@@ -230,6 +230,7 @@ fun VideoPlayer(
     modifier: Modifier = Modifier,
     onPlaybackReady: () -> Unit = {},
     onPlaybackError: () -> Unit = {},
+    onReResolve: (() -> Unit)? = null,
     startPositionMs: Long = 0L,
     episodeIndex: Int = 0,
     episodes: List<Episode> = emptyList(),
@@ -318,6 +319,7 @@ fun VideoPlayer(
     // 以 player 为 key：缓存地址失效后重新抓流会换播放器实例，
     // 旧实例上的错误状态不能残留到新实例的错误层上
     var error by remember(player) { mutableStateOf<PlaybackException?>(player.playerError) }
+    var retryAttempts by remember(player) { mutableIntStateOf(0) }
     var bufferedPosition by remember(player) { mutableLongStateOf(player.bufferedPosition) }
     var isControllerVisible by remember { mutableStateOf(true) }
     // 控制层任意触摸都重置 3s 自动隐藏计时
@@ -419,6 +421,7 @@ fun VideoPlayer(
                 // READY 表示主播放列表/分片已可正常加载，地址验证可用
                 if (state == Player.STATE_READY) {
                     endedNotified = false
+                    retryAttempts = 0
                     onPlaybackReady()
                 }
                 // 本集播放结束：交由调用方决定自动连播下一集（末集不动作，显示重播）
@@ -883,9 +886,14 @@ fun VideoPlayer(
             ErrorOverlay(
                 error = error,
                 onRetry = {
-                    error = null
-                    player.prepare()
-                    player.playWhenReady = true
+                    if (onReResolve != null && shouldReResolveOnError(error, retryAttempts)) {
+                        onReResolve()
+                    } else {
+                        retryAttempts += 1
+                        error = null
+                        player.prepare()
+                        player.playWhenReady = true
+                    }
                 },
                 modifier = Modifier.fillMaxSize()
             )
