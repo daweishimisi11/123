@@ -236,6 +236,8 @@
     <string name="detail_favorited">已收藏</string>
     <string name="detail_favorite_added">已加入收藏</string>
     <string name="detail_favorite_removed">已取消收藏</string>
+    <string name="detail_favorite_updated">已更新收藏夹</string>
+    <string name="detail_favorite_remove_action">取消收藏</string>
     <string name="detail_favorite_picker_title">收藏到</string>
     <string name="detail_favorite_only">未分组</string>
     <string name="detail_favorite_pick_group">或选择一个收藏夹</string>

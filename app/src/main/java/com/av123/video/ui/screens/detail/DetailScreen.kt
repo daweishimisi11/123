@@ -143,6 +143,7 @@ fun DetailScreen(
     // 当前视频是否已收藏（收藏数据在本机持久化，返回详情页时即时反映）
     val isFavorite by detailViewModel.isFavorite.collectAsStateWithLifecycle()
     val favoriteGroups by detailViewModel.favoriteGroups.collectAsStateWithLifecycle()
+    val favoriteGroupIds by detailViewModel.favoriteGroupIds.collectAsStateWithLifecycle()
     // WebView 拦截到的真实播放地址（m3u8 + Referer 等请求头）
     val playback by detailViewModel.playback.collectAsStateWithLifecycle()
     // 播放地址解析是否失败（超时/播放页不可达），失败后封面展示重试入口
@@ -216,22 +217,13 @@ fun DetailScreen(
     val resolvingAutoPlayText = stringResource(R.string.detail_resolving_autoplay)
     val favoriteAddedText = stringResource(R.string.detail_favorite_added)
     val favoriteRemovedText = stringResource(R.string.detail_favorite_removed)
+    val favoriteUpdatedText = stringResource(R.string.detail_favorite_updated)
     val autoNextText = stringResource(R.string.detail_auto_next)
 
-    // 收藏按钮：未收藏时打开分组弹层；已收藏时再点直接取消收藏
+    // 收藏按钮：无论是否已收藏都打开分组弹层，支持首次收藏、原地换组及取消收藏
     val onToggleFavorite: () -> Unit = {
         haptics.tick()
-        if (isFavorite) {
-            detailViewModel.removeFavorite()
-            scope.launch {
-                snackbarHostState.showAppSnackbar(
-                    message = favoriteRemovedText,
-                    tone = SnackbarTone.Removal
-                )
-            }
-        } else {
-            showFavoritePicker = true
-        }
+        showFavoritePicker = true
     }
 
     // 详情表「代码」行：长按复制编号
@@ -475,18 +467,33 @@ fun DetailScreen(
     if (showFavoritePicker) {
         FavoritePickerSheet(
             groups = favoriteGroups,
+            initialGroupIds = favoriteGroupIds,
+            isFavorite = isFavorite,
             createGroup = { detailViewModel.createFavoriteGroup(it) },
-            onConfirm = { groupId ->
-                detailViewModel.favoriteWithGroup(groupId)
-                val groupName = favoriteGroups.firstOrNull { it.id == groupId }?.name
+            onConfirm = { groupIds ->
+                val wasFavorite = isFavorite
+                detailViewModel.favoriteWithGroups(groupIds)
+                val singleGroupName = groupIds.singleOrNull()?.let { id ->
+                    favoriteGroups.firstOrNull { it.id == id }?.name
+                }
                 scope.launch {
                     snackbarHostState.showAppSnackbar(
-                        message = if (groupName != null) {
-                            resources.getString(R.string.detail_favorited_to, groupName)
-                        } else {
-                            favoriteAddedText
+                        message = when {
+                            singleGroupName != null ->
+                                resources.getString(R.string.detail_favorited_to, singleGroupName)
+                            wasFavorite -> favoriteUpdatedText
+                            else -> favoriteAddedText
                         },
                         tone = SnackbarTone.Success
+                    )
+                }
+            },
+            onRemoveFavorite = {
+                detailViewModel.removeFavorite()
+                scope.launch {
+                    snackbarHostState.showAppSnackbar(
+                        message = favoriteRemovedText,
+                        tone = SnackbarTone.Removal
                     )
                 }
             },

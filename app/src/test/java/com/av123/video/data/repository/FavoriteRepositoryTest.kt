@@ -104,4 +104,28 @@ class FavoriteRepositoryTest {
         val remainingItems = repo.groupItems.first()
         assertEquals(listOf(groupB.id), remainingItems.map { it.groupId })
     }
+
+    @Test
+    fun `replaceVideoGroups switches memberships without losing favorite record`() = runBlocking {
+        val favoriteDao = FakeFavoriteDao()
+        val groupDao = FakeFavoriteGroupDao()
+        val repo = FavoriteRepository(favoriteDao, groupDao)
+
+        val video = Video(id = "v1", title = "测试视频", category = "")
+        repo.add(video)
+        val groupA = (repo.createGroup("分组A") as GroupEditResult.Success).group
+        val groupB = (repo.createGroup("分组B") as GroupEditResult.Success).group
+        val groupC = (repo.createGroup("分组C") as GroupEditResult.Success).group
+
+        repo.replaceVideoGroups("v1", setOf(groupA.id, groupB.id))
+        assertEquals(setOf(groupA.id, groupB.id), repo.groupItems.first().map { it.groupId }.toSet())
+
+        repo.replaceVideoGroups("v1", setOf(groupB.id, groupC.id))
+        assertTrue(repo.isFavorite("v1"))
+        assertEquals(setOf(groupB.id, groupC.id), repo.groupItems.first().map { it.groupId }.toSet())
+
+        repo.replaceVideoGroups("v1", emptySet())
+        assertTrue(repo.isFavorite("v1"))
+        assertTrue(repo.groupItems.first().isEmpty())
+    }
 }

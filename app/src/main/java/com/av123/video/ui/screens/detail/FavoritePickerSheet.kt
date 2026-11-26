@@ -1,6 +1,7 @@
 package com.av123.video.ui.screens.detail
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,25 +47,24 @@ import com.av123.video.ui.util.rememberAppHaptics
 import kotlinx.coroutines.launch
 
 /**
- * 详情页「收藏到」弹层（只服务未收藏 → 收藏）：
- * - 单选：未分组 / 某个收藏夹，点选只改本地选中态，不立即写入；
- * - 点「完成」才落库：收藏 + 归入所选分组；
- * - 「新建收藏夹」在分组标题行右侧，输入框固定在分组列表顶部；
- *   建完只选中新组，仍要点「完成」才加入；
- * - 不提供「取消收藏」——已收藏时再点收藏按钮会直接取消。
+ * 详情页「收藏到」弹层：
+ * - 支持未收藏时选择收藏夹收藏，也支持已收藏时原地切换所属收藏夹或取消收藏；
+ * - 未分组与多收藏夹自由切换，点「完成」统一落库。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FavoritePickerSheet(
     groups: List<FavoriteGroup>,
+    initialGroupIds: Set<Long>,
+    isFavorite: Boolean,
     createGroup: suspend (String) -> GroupEditResult,
-    onConfirm: (Long?) -> Unit,
+    onConfirm: (Set<Long>) -> Unit,
+    onRemoveFavorite: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val haptics = rememberAppHaptics()
     val scope = rememberCoroutineScope()
-    // null = 未分组
-    var selectedGroupId by remember { mutableStateOf<Long?>(null) }
+    var selectedGroupIds by remember(initialGroupIds) { mutableStateOf(initialGroupIds) }
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -88,10 +90,10 @@ internal fun FavoritePickerSheet(
             GroupOptionRow(
                 icon = AppIcons.Inbox,
                 label = stringResource(R.string.detail_favorite_only),
-                selected = selectedGroupId == null,
+                selected = selectedGroupIds.isEmpty(),
                 onClick = {
                     haptics.tick()
-                    selectedGroupId = null
+                    selectedGroupIds = emptySet()
                 }
             )
 
@@ -164,7 +166,7 @@ internal fun FavoritePickerSheet(
                                 scope.launch {
                                     when (val result = createGroup(newName.trim())) {
                                         is GroupEditResult.Success -> {
-                                            selectedGroupId = result.group.id
+                                            selectedGroupIds = selectedGroupIds + result.group.id
                                             creating = false
                                             newName = ""
                                             errorText = null
@@ -197,28 +199,53 @@ internal fun FavoritePickerSheet(
                 }
 
                 groups.forEach { group ->
+                    val inGroup = group.id in selectedGroupIds
                     GroupOptionRow(
                         icon = AppIcons.Bookmarks,
                         label = group.name,
-                        selected = selectedGroupId == group.id,
+                        selected = inGroup,
                         onClick = {
                             haptics.tick()
-                            selectedGroupId = group.id
+                            selectedGroupIds = if (inGroup) {
+                                selectedGroupIds - group.id
+                            } else {
+                                selectedGroupIds + group.id
+                            }
                         }
                     )
                 }
             }
 
             Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    haptics.confirm()
-                    onConfirm(selectedGroupId)
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(stringResource(R.string.detail_favorite_done))
+                if (isFavorite) {
+                    OutlinedButton(
+                        onClick = {
+                            haptics.confirm()
+                            onRemoveFavorite()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.detail_favorite_remove_action))
+                    }
+                }
+                Button(
+                    onClick = {
+                        haptics.confirm()
+                        onConfirm(selectedGroupIds)
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.detail_favorite_done))
+                }
             }
         }
     }

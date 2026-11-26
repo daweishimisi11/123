@@ -190,6 +190,28 @@ class FavoriteRepository(
             groupDao.removeItems(groupId, videoIds.toList())
         }
     }
+
+    /** 将指定视频所属的收藏夹集合更新为 [targetGroupIds]（保留已有分组的原 addedAt） */
+    suspend fun replaceVideoGroups(videoId: String, targetGroupIds: Set<Long>) {
+        val currentIds = groupDao.getAllItems()
+            .asSequence()
+            .filter { it.videoId == videoId }
+            .map { it.groupId }
+            .toSet()
+        val toRemove = currentIds - targetGroupIds
+        val toAdd = targetGroupIds - currentIds
+        toRemove.forEach { groupId ->
+            groupDao.removeItems(groupId, listOf(videoId))
+        }
+        if (toAdd.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            groupDao.upsertItems(
+                toAdd.map { groupId ->
+                    FavoriteGroupItemEntity(groupId = groupId, videoId = videoId, addedAt = now)
+                }
+            )
+        }
+    }
 }
 
 /** Entity -> 领域模型；videoJson 损坏时用 id 兜底 */

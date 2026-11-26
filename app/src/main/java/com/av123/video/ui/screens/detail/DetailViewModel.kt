@@ -494,17 +494,29 @@ class DetailViewModel(
             initialValue = emptyList()
         )
 
+    /** 当前视频所属的收藏夹 id 集合：已收藏时点开弹层可回显并切换分组 */
+    val favoriteGroupIds: StateFlow<Set<Long>> = favoriteRepository.groupItems
+        .map { items ->
+            items.asSequence()
+                .filter { it.videoId == videoId }
+                .map { it.groupId }
+                .toSet()
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = emptySet()
+        )
+
     /**
-     * 收藏并归入指定分组（弹层点「完成」时调用）；groupId 为 null 表示未分组。
-     * 先落收藏再写成员关系：favorite_group_items.videoId 外键指向 favorites。
+     * 收藏并更新所属收藏夹（弹层点「完成」时调用）；空集合表示未分组。
+     * 先落收藏再更新成员关系：favorite_group_items.videoId 外键指向 favorites。
      */
-    fun favoriteWithGroup(groupId: Long?) {
+    fun favoriteWithGroups(groupIds: Set<Long>) {
         val video = _video.value ?: return
         viewModelScope.launch {
             favoriteRepository.add(video)
-            if (groupId != null) {
-                favoriteRepository.setGroupMembership(groupId, listOf(video.id), true)
-            }
+            favoriteRepository.replaceVideoGroups(video.id, groupIds)
         }
     }
 
