@@ -1,6 +1,7 @@
 package com.av123.video.ui.screens.favorites
 
 import com.av123.video.data.model.FavoriteRecord
+import com.av123.video.ui.screens.detail.detailCodeFromInfoRows
 import java.text.Collator
 import java.util.Locale
 
@@ -20,9 +21,14 @@ fun sortFavorites(records: List<FavoriteRecord>, sort: FavoritesSort): List<Favo
         }
     }
 
-/** 当前范围内的本地搜索：按标题包含匹配，空查询原样返回 */
+/** 当前范围内的本地搜索：按标题、番号 code 或信息行代码包含匹配，空查询原样返回 */
 fun searchFavorites(records: List<FavoriteRecord>, query: String): List<FavoriteRecord> {
     val keyword = query.trim()
     if (keyword.isEmpty()) return records
-    return records.filter { it.video.title.contains(keyword, ignoreCase = true) }
+    return records.filter { record ->
+        val video = record.video
+        video.title.contains(keyword, ignoreCase = true) ||
+            video.code.contains(keyword, ignoreCase = true) ||
+            video.detailCodeFromInfoRows().contains(keyword, ignoreCase = true)
+    }
 }

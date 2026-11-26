@@ -2,13 +2,26 @@ package com.av123.video.ui.screens.favorites
 
 import com.av123.video.data.model.FavoriteRecord
 import com.av123.video.data.model.Video
+import com.av123.video.data.model.VideoInfoRow
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class FavoritesSortTest {
 
-    private fun record(id: String, title: String, favoritedAt: Long) = FavoriteRecord(
-        video = Video(id = id, title = title, category = ""),
+    private fun record(
+        id: String,
+        title: String,
+        favoritedAt: Long,
+        code: String = "",
+        infoRows: List<VideoInfoRow> = emptyList()
+    ) = FavoriteRecord(
+        video = Video(
+            id = id,
+            title = title,
+            category = "",
+            code = code,
+            infoRows = infoRows
+        ),
         favoritedAt = favoritedAt
     )
 
@@ -41,5 +54,20 @@ class FavoritesSortTest {
     @Test
     fun emptyQueryReturnsInputOrder() {
         assertEquals(listOf("a", "b", "c"), searchFavorites(records, "").map { it.video.id })
+    }
+
+    @Test
+    fun searchMatchesCodeAndInfoRowsCodeIgnoreCase() {
+        val codeRecords = listOf(
+            record("v1", "纯标题一", 100L, code = "ABC-123"),
+            record(
+                "v2",
+                "纯标题二",
+                200L,
+                infoRows = listOf(VideoInfoRow(label = "代码", value = "XYZ-999"))
+            )
+        )
+        assertEquals(listOf("v1"), searchFavorites(codeRecords, "abc-123").map { it.video.id })
+        assertEquals(listOf("v2"), searchFavorites(codeRecords, "xyz-999").map { it.video.id })
     }
 }
