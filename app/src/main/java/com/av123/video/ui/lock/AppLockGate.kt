@@ -27,6 +27,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -95,32 +97,39 @@ internal fun authenticateAppLock(
     prompt.authenticate(info)
 }
 
+/** 计算离开后台时长是否达到重新锁定阈值 */
+internal fun shouldRelockAfterBackground(awayMs: Long, relockAfterMs: Long): Boolean =
+    relockAfterMs <= 0L || awayMs >= relockAfterMs
+
 /**
  * 应用锁门禁：
- * - 冷启动按 [enabledAtLaunch] 决定是否启用；启用后本进程解锁；
+ * - 响应运行时 [enabled] 开关变化：运行期刚在设置页开启时不二次弹窗，离开超时后即生效；
  * - 离开超过 [relockAfterMs] 后回前台重新验证（0 表示立即）；
  * - 未解锁时不组合 [content]，避免内容在锁屏下被截图或无障碍读取；
  * - 取消/报错切到后台，回前台自动重弹。
  */
 @Composable
 fun AppLockGate(
-    enabledAtLaunch: Boolean,
+    enabled: Boolean,
     relockAfterMs: Long,
     content: @Composable () -> Unit
 ) {
-    if (!enabledAtLaunch) {
+    // 曾处于关闭状态说明是运行期刚通过设置页认证开启，本次进程保持已解锁直到下次切后台超时
+    var unlockedByRuntimeEnable by remember { mutableStateOf(false) }
+    if (!enabled) {
+        unlockedByRuntimeEnable = true
         content()
         return
     }
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() as? FragmentActivity }
-    // 解锁态只在本进程内存中；true 后渲染 content，进程被杀重启重新验证
-    var unlocked by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // 解锁态只在本进程内存中；冷启动默认锁住，运行期开启维持已解锁直到离开超时
+    var unlocked by remember { mutableStateOf(unlockedByRuntimeEnable) }
     // 认证触发计数：进入即 1（首次 ON_RESUME 可能已过），之后每次需要验证时 +1
     var promptTick by remember { mutableIntStateOf(1) }
     // 进入后台的时间点（elapsedRealtime），0 表示当前不在“离开待判定”状态
-    var backgroundedAt by remember { androidx.compose.runtime.mutableStateOf(0L) }
+    var backgroundedAt by remember { mutableLongStateOf(0L) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, relockAfterMs) {
@@ -138,7 +147,7 @@ fun AppLockGate(
                         promptTick++
                     } else if (backgroundedAt > 0L) {
                         val awayMs = SystemClock.elapsedRealtime() - backgroundedAt
-                        if (relockAfterMs <= 0L || awayMs >= relockAfterMs) {
+                        if (shouldRelockAfterBackground(awayMs, relockAfterMs)) {
                             unlocked = false
                             promptTick++
                         }

@@ -199,11 +199,9 @@ class MainActivity : FragmentActivity() {
                     ) {
                         // 设置未加载完不渲染内容：应用锁开关未知时宁可保持空白
                         if (settingsState.loaded) {
-                            // 应用锁：按设置加载完成时的开关快照决定；
-                            // 运行期修改开关不改变本进程冷启动判定
-                            val appLockAtLaunch = remember { settings.appLockEnabled }
+                            // 响应运行时开关变化：开启或关闭应用锁立即生效，无需强杀进程重启
                             AppLockGate(
-                                enabledAtLaunch = appLockAtLaunch,
+                                enabled = settings.appLockEnabled,
                                 relockAfterMs = settings.appLockTimeout.millis
                             ) {
                                 VideoHubApp()
