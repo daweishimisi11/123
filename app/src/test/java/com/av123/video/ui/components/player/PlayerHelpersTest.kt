@@ -1,5 +1,6 @@
 package com.av123.video.ui.components.player
 
+import android.media.AudioManager
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
@@ -154,5 +155,14 @@ class PlayerHelpersTest {
             maxVolume = 15
         )
         assertEquals(0, volMin)
+    }
+
+    @Test
+    fun `isMusicVolumeBroadcast filters music stream volume and mute events`() {
+        assertTrue(isMusicVolumeBroadcast(ACTION_VOLUME_CHANGED, AudioManager.STREAM_MUSIC))
+        assertTrue(isMusicVolumeBroadcast(ACTION_STREAM_MUTE_CHANGED, AudioManager.STREAM_MUSIC))
+        assertTrue(isMusicVolumeBroadcast(ACTION_VOLUME_CHANGED, -1))
+        assertFalse(isMusicVolumeBroadcast(ACTION_VOLUME_CHANGED, AudioManager.STREAM_RING))
+        assertFalse(isMusicVolumeBroadcast("android.intent.action.OTHER", AudioManager.STREAM_MUSIC))
     }
 }

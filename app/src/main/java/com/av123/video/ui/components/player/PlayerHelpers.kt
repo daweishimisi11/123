@@ -2,6 +2,7 @@ package com.av123.video.ui.components.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
@@ -213,3 +214,11 @@ internal fun shouldReResolveOnError(
     error: PlaybackException?,
     retryAttempts: Int
 ): Boolean = shouldReResolveOnError(extractHttpResponseCode(error), retryAttempts)
+
+internal const val ACTION_VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
+internal const val ACTION_STREAM_MUTE_CHANGED = "android.media.STREAM_MUTE_CHANGED_ACTION"
+internal const val EXTRA_VOLUME_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+
+internal fun isMusicVolumeBroadcast(action: String?, streamType: Int): Boolean =
+    (action == ACTION_VOLUME_CHANGED || action == ACTION_STREAM_MUTE_CHANGED) &&
+        (streamType == -1 || streamType == AudioManager.STREAM_MUSIC)

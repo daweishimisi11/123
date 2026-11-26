@@ -238,17 +238,34 @@ internal fun PlayerControls(
         mutableStateOf(audioManager.isStreamMute(AudioManager.STREAM_MUSIC))
     }
 
-    // 监听系统音量变化（物理音量键、其他应用调整等），保证图标与音量条实时同步
+    // 监听系统媒体音量与静音广播（兼容 Android 9+ 物理音量键变化），实时同步图标与音量条
     DisposableEffect(audioManager, context) {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                isMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        val syncVolume = {
+            volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            isMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        }
+        syncVolume()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                val streamType = intent?.getIntExtra(EXTRA_VOLUME_STREAM_TYPE, -1) ?: -1
+                if (isMusicVolumeBroadcast(intent?.action, streamType)) {
+                    syncVolume()
+                }
             }
         }
-        val uri = Settings.System.CONTENT_URI
-        context.contentResolver.registerContentObserver(uri, true, observer)
-        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+        val filter = IntentFilter().apply {
+            addAction(ACTION_VOLUME_CHANGED)
+            addAction(ACTION_STREAM_MUTE_CHANGED)
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
     }
 
     val effectivelyMuted = isMuted || volume == 0
