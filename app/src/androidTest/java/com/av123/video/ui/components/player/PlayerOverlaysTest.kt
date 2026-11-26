@@ -10,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Compose 冒烟：播放失败浮层必须同时出现标题与重播按钮。 */
+/** Compose 冒烟：播放失败浮层必须同时出现标题与重播按钮；手势调节浮层正确展示百分比。 */
 @RunWith(AndroidJUnit4::class)
 class PlayerOverlaysTest {
 
@@ -31,5 +31,16 @@ class PlayerOverlaysTest {
 
         composeRule.onNodeWithText("播放失败").assertIsDisplayed()
         composeRule.onNodeWithText("重新播放").assertIsDisplayed()
+    }
+
+    @Test
+    fun gestureLevelOverlay_showsBrightnessPercentage() {
+        composeRule.setContent {
+            GestureLevelOverlay(
+                side = VerticalGestureSide.BRIGHTNESS,
+                fraction = 0.75f
+            )
+        }
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
     }
 }

@@ -110,4 +110,49 @@ class PlayerHelpersTest {
         assertTrue(shouldReResolveOnError(httpStatusCode = null, retryAttempts = 1))
         assertTrue(shouldReResolveOnError(httpStatusCode = 502, retryAttempts = 1))
     }
+
+    @Test
+    fun `vertical gesture helpers classify halves and clamp brightness and volume`() {
+        assertEquals(
+            VerticalGestureSide.BRIGHTNESS,
+            classifyVerticalGestureSide(startX = 100f, widthPx = 1000f)
+        )
+        assertEquals(
+            VerticalGestureSide.VOLUME,
+            classifyVerticalGestureSide(startX = 500f, widthPx = 1000f)
+        )
+
+        val brightened = computeDraggedBrightness(
+            startBrightness = 0.2f,
+            accumulatedDy = -375f,
+            heightPx = 1000f
+        )
+        assertEquals(0.7f, brightened, 0.001f)
+        assertEquals(
+            0.01f,
+            computeDraggedBrightness(startBrightness = 0.1f, accumulatedDy = 500f, heightPx = 1000f),
+            0.001f
+        )
+        assertEquals(
+            1.0f,
+            computeDraggedBrightness(startBrightness = 0.8f, accumulatedDy = -500f, heightPx = 1000f),
+            0.001f
+        )
+
+        val (volUp, fracUp) = computeDraggedVolume(
+            startFraction = 0.2f,
+            accumulatedDy = -375f,
+            heightPx = 1000f,
+            maxVolume = 15
+        )
+        assertEquals(0.7f, fracUp, 0.001f)
+        assertEquals(11, volUp)
+        val (volMin, _) = computeDraggedVolume(
+            startFraction = 0.1f,
+            accumulatedDy = 500f,
+            heightPx = 1000f,
+            maxVolume = 15
+        )
+        assertEquals(0, volMin)
+    }
 }

@@ -20,6 +20,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,8 +55,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -65,7 +70,11 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.PlaybackException
 import com.av123.video.R
 import com.av123.video.ui.theme.Motion
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * 长按快放提示：顶部居中的紧凑胶囊（快进图标 + “2X”），
@@ -202,6 +211,89 @@ internal fun DoubleSeekFeedback(
             fontSize = AppTypeScale.Label,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+/**
+ * 全屏左侧上下滑动亮度 / 右侧上下滑动音量的居中百分比指示条。
+ */
+@Composable
+internal fun GestureLevelOverlay(
+    side: VerticalGestureSide,
+    fraction: Float,
+    modifier: Modifier = Modifier
+) {
+    val clamped = fraction.coerceIn(0f, 1f)
+    val percent = (clamped * 100f).roundToInt()
+    Row(
+        modifier = modifier
+            .clip(AppShapes.ExtraLarge)
+            .background(Color.Black.copy(alpha = 0.65f))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (side == VerticalGestureSide.BRIGHTNESS) {
+            BrightnessSunIcon(modifier = Modifier.size(18.dp))
+        } else {
+            Icon(
+                imageVector = if (percent == 0) AppIcons.VolumeOff else AppIcons.VolumeUp,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(96.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.28f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(clamped)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+        Text(
+            text = "$percent%",
+            color = Color.White,
+            fontSize = AppTypeScale.Label,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.widthIn(min = 36.dp),
+            textAlign = TextAlign.End
+        )
+    }
+}
+
+@Composable
+private fun BrightnessSunIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val innerRadius = size.minDimension * 0.22f
+        val rayStart = size.minDimension * 0.34f
+        val rayEnd = size.minDimension * 0.46f
+        val stroke = Stroke(width = size.minDimension * 0.1f, cap = StrokeCap.Round)
+        drawCircle(
+            color = Color.White,
+            radius = innerRadius,
+            center = center,
+            style = stroke
+        )
+        repeat(8) { i ->
+            val angle = i * (PI / 4.0)
+            val cosA = cos(angle).toFloat()
+            val sinA = sin(angle).toFloat()
+            drawLine(
+                color = Color.White,
+                start = Offset(center.x + rayStart * cosA, center.y + rayStart * sinA),
+                end = Offset(center.x + rayEnd * cosA, center.y + rayEnd * sinA),
+                strokeWidth = size.minDimension * 0.1f,
+                cap = StrokeCap.Round
+            )
+        }
     }
 }
 

@@ -350,10 +350,37 @@ fun VideoPlayer(
     // 锁定态解锁键独立计时：锁上后短暂显示，超时隐藏；点画面重新唤出
     var isLockControlVisible by remember(player) { mutableStateOf(false) }
     var lockControlInteractionTick by remember { mutableIntStateOf(0) }
+    // 全屏左侧滑动亮度 / 右侧滑动音量状态
+    var verticalGestureOverlay by remember { mutableStateOf<Pair<VerticalGestureSide, Float>?>(null) }
+    var hasAdjustedBrightness by remember { mutableStateOf(false) }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val currentFullscreen by rememberUpdatedState(isFullscreen)
     LaunchedEffect(isFullscreen) {
         if (!isFullscreen) {
             isLocked = false
             isLockControlVisible = false
+            verticalGestureOverlay = null
+            if (hasAdjustedBrightness) {
+                activity?.window?.let { win ->
+                    val lp = win.attributes
+                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    win.attributes = lp
+                }
+                hasAdjustedBrightness = false
+            }
+        }
+    }
+    DisposableEffect(activity) {
+        onDispose {
+            if (hasAdjustedBrightness) {
+                activity?.window?.let { win ->
+                    val lp = win.attributes
+                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    win.attributes = lp
+                }
+            }
         }
     }
 
@@ -670,16 +697,16 @@ fun VideoPlayer(
                                 val leftBoundary = widthPx * (0.5f - DOUBLE_TAP_CENTER_ZONE / 2f)
                                 val rightBoundary = widthPx * (0.5f + DOUBLE_TAP_CENTER_ZONE / 2f)
                                 when {
-                                    // 左半屏：快退 10 秒（已到开头则停在 0）
-                                    duration > 0L && x < leftBoundary -> {
+                                    // 左半屏：快退 10 秒（总时长未就绪时不触发暂停）
+                                    x < leftBoundary -> if (duration > 0L) {
                                         val target = (position - DOUBLE_TAP_SEEK_STEP_MS)
                                             .coerceAtLeast(0L)
                                         player.seekTo(target)
                                         position = target
                                         doubleSeekFeedback = -1 to System.currentTimeMillis()
                                     }
-                                    // 右半屏：快进 10 秒（已到结尾则停在 duration）
-                                    duration > 0L && x > rightBoundary -> {
+                                    // 右半屏：快进 10 秒（总时长未就绪时不触发暂停）
+                                    x > rightBoundary -> if (duration > 0L) {
                                         val target = (position + DOUBLE_TAP_SEEK_STEP_MS)
                                             .coerceAtMost(duration)
                                         player.seekTo(target)
@@ -755,6 +782,94 @@ fun VideoPlayer(
                                 accumulatedDx / widthPx * duration * HORIZONTAL_SEEK_FRACTION
                             seekPreviewTargetMs =
                                 (startPositionMs + deltaMs.toLong()).coerceIn(0L, duration)
+                        }
+                    )
+                }
+                .pointerInput(isLocked) {
+                    // 竖向滑动手势（全屏生效）：左侧调屏幕亮度，右侧调媒体音量
+                    var gestureSide = VerticalGestureSide.VOLUME
+                    var accumulatedDy = 0f
+                    var startValue = 0.5f
+                    var maxVolume = 15
+                    var lastAppliedVolume = -1
+                    var active = false
+                    detectVerticalDragGestures(
+                        onDragStart = { startOffset ->
+                            accumulatedDy = 0f
+                            active = false
+                            gestureSide = classifyVerticalGestureSide(
+                                startX = startOffset.x,
+                                widthPx = size.width.toFloat().coerceAtLeast(1f)
+                            )
+                            if (gestureSide == VerticalGestureSide.BRIGHTNESS) {
+                                val raw = activity?.window?.attributes?.screenBrightness
+                                    ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                                startValue = if (raw in 0f..1f) {
+                                    raw
+                                } else {
+                                    runCatching {
+                                        Settings.System.getInt(
+                                            context.contentResolver,
+                                            Settings.System.SCREEN_BRIGHTNESS
+                                        ) / 255f
+                                    }.getOrDefault(0.5f).coerceIn(0.01f, 1f)
+                                }
+                            } else {
+                                maxVolume = audioManager
+                                    .getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    .coerceAtLeast(1)
+                                val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                lastAppliedVolume = currentVol
+                                startValue = currentVol.toFloat() / maxVolume.toFloat()
+                            }
+                        },
+                        onDragEnd = {
+                            verticalGestureOverlay = null
+                            active = false
+                        },
+                        onDragCancel = {
+                            verticalGestureOverlay = null
+                            active = false
+                        },
+                        onVerticalDrag = { _, dragAmount ->
+                            if (!currentFullscreen || isInPip || error != null || isLocked) {
+                                return@detectVerticalDragGestures
+                            }
+                            active = true
+                            accumulatedDy += dragAmount
+                            val heightPx = size.height.toFloat().coerceAtLeast(1f)
+                            if (gestureSide == VerticalGestureSide.BRIGHTNESS) {
+                                val targetBrightness = computeDraggedBrightness(
+                                    startBrightness = startValue,
+                                    accumulatedDy = accumulatedDy,
+                                    heightPx = heightPx
+                                )
+                                activity?.window?.let { win ->
+                                    val lp = win.attributes
+                                    lp.screenBrightness = targetBrightness
+                                    win.attributes = lp
+                                    hasAdjustedBrightness = true
+                                }
+                                verticalGestureOverlay =
+                                    VerticalGestureSide.BRIGHTNESS to targetBrightness
+                            } else {
+                                val (targetVol, nextFraction) = computeDraggedVolume(
+                                    startFraction = startValue,
+                                    accumulatedDy = accumulatedDy,
+                                    heightPx = heightPx,
+                                    maxVolume = maxVolume
+                                )
+                                if (targetVol != lastAppliedVolume) {
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        targetVol,
+                                        0
+                                    )
+                                    lastAppliedVolume = targetVol
+                                }
+                                verticalGestureOverlay =
+                                    VerticalGestureSide.VOLUME to nextFraction
+                            }
                         }
                     )
                 }
@@ -1007,6 +1122,16 @@ fun VideoPlayer(
                 .padding(top = if (isFullscreen) 56.dp else 12.dp)
         ) {
             LongPressSpeedBadge(speed = LONG_PRESS_SPEED)
+        }
+
+        // 竖滑亮度/音量浮层：居中显示图标 + 进度条 + 百分比
+        val gestureState = verticalGestureOverlay
+        if (gestureState != null && isFullscreen && error == null && !isInPip) {
+            GestureLevelOverlay(
+                side = gestureState.first,
+                fraction = gestureState.second,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }

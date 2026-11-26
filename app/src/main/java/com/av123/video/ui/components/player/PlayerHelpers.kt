@@ -27,6 +27,43 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.ui.util.findActivity
 
+import kotlin.math.roundToInt
+
+/** 竖向滑动手势调节手势占屏幕高度的比例（滑过 75% 高度可覆盖全量程） */
+private const val VERTICAL_GESTURE_HEIGHT_FRACTION = 0.75f
+
+internal enum class VerticalGestureSide {
+    BRIGHTNESS,
+    VOLUME
+}
+
+internal fun classifyVerticalGestureSide(startX: Float, widthPx: Float): VerticalGestureSide =
+    if (startX < widthPx / 2f) VerticalGestureSide.BRIGHTNESS else VerticalGestureSide.VOLUME
+
+internal fun computeDraggedBrightness(
+    startBrightness: Float,
+    accumulatedDy: Float,
+    heightPx: Float
+): Float {
+    val safeHeight = heightPx.coerceAtLeast(1f) * VERTICAL_GESTURE_HEIGHT_FRACTION
+    val delta = -accumulatedDy / safeHeight
+    return (startBrightness + delta).coerceIn(0.01f, 1.0f)
+}
+
+internal fun computeDraggedVolume(
+    startFraction: Float,
+    accumulatedDy: Float,
+    heightPx: Float,
+    maxVolume: Int
+): Pair<Int, Float> {
+    val safeMax = maxVolume.coerceAtLeast(1)
+    val safeHeight = heightPx.coerceAtLeast(1f) * VERTICAL_GESTURE_HEIGHT_FRACTION
+    val delta = -accumulatedDy / safeHeight
+    val nextFraction = (startFraction + delta).coerceIn(0f, 1f)
+    val targetIndex = (nextFraction * safeMax).roundToInt().coerceIn(0, safeMax)
+    return targetIndex to nextFraction
+}
+
 /** 应用内画面比例枚举 → media3 AspectRatioFrameLayout 常量 */
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun ResizeModeOption.toMedia3ResizeMode(): Int = when (this) {
