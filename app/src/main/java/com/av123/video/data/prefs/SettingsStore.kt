@@ -33,6 +33,13 @@ enum class AppLockTimeout(val millis: Long) {
     FIVE_MINUTES(300_000L)
 }
 
+/** 播放器横向滑动手势快进/快退灵敏度（划满全屏对应的微调跨度，秒） */
+enum class SeekGestureSensitivity(val fullSwipeSeconds: Int) {
+    FINE(60),
+    STANDARD(90),
+    FAST(180)
+}
+
 /** 全局外观与播放设置 */
 data class AppSettings(
     val dynamicColor: Boolean = false,
@@ -54,7 +61,9 @@ data class AppSettings(
     /** 离开应用超过该时长后重新上锁 */
     val appLockTimeout: AppLockTimeout = AppLockTimeout.THIRTY_SECONDS,
     /** 阻止截屏/录屏，并在最近任务中隐藏预览 */
-    val secureScreenEnabled: Boolean = true
+    val secureScreenEnabled: Boolean = true,
+    /** 横滑快进/快退手势灵敏度，默认适中（适合几秒到几十秒微调） */
+    val seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
 )
 
 /**
@@ -118,7 +127,12 @@ class SettingsStore(context: Context) {
                     prefs[KEY_APP_LOCK_TIMEOUT] ?: AppLockTimeout.THIRTY_SECONDS.name
                 )
             }.getOrDefault(AppLockTimeout.THIRTY_SECONDS),
-            secureScreenEnabled = prefs[KEY_SECURE_SCREEN] ?: true
+            secureScreenEnabled = prefs[KEY_SECURE_SCREEN] ?: true,
+            seekGestureSensitivity = runCatching {
+                SeekGestureSensitivity.valueOf(
+                    prefs[KEY_SEEK_GESTURE_SENSITIVITY] ?: SeekGestureSensitivity.STANDARD.name
+                )
+            }.getOrDefault(SeekGestureSensitivity.STANDARD)
         )
     }.onEach { writeStartupMirror(it) }
 
@@ -174,6 +188,10 @@ class SettingsStore(context: Context) {
         store.edit { it[KEY_SECURE_SCREEN] = enabled }
     }
 
+    suspend fun setSeekGestureSensitivity(sensitivity: SeekGestureSensitivity) {
+        store.edit { it[KEY_SEEK_GESTURE_SENSITIVITY] = sensitivity.name }
+    }
+
     private companion object {
         const val STARTUP_PREFS = "startup_settings"
         const val STARTUP_KEY_DARK_MODE = "dark_mode"
@@ -190,5 +208,6 @@ class SettingsStore(context: Context) {
         val KEY_APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         val KEY_APP_LOCK_TIMEOUT = stringPreferencesKey("app_lock_timeout")
         val KEY_SECURE_SCREEN = booleanPreferencesKey("secure_screen")
+        val KEY_SEEK_GESTURE_SENSITIVITY = stringPreferencesKey("seek_gesture_sensitivity")
     }
 }

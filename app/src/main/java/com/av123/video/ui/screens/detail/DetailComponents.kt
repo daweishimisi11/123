@@ -104,6 +104,7 @@ import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.prefs.ResizeModeOption
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.components.ErrorState
 import com.av123.video.ui.components.LoadingState
 import com.av123.video.ui.components.VideoGridCard
@@ -561,6 +562,7 @@ internal fun PlayerArea(
     onFlipToExitChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
+    seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
     onEpisodeEnded: () -> Unit = {},
     episodes: List<Episode> = emptyList(),
     onSelectEpisode: (Int) -> Unit = {}
@@ -596,6 +598,7 @@ internal fun PlayerArea(
             onFlipToExitChange = onFlipToExitChange,
             resizeMode = resizeMode,
             onResizeModeChange = onResizeModeChange,
+            seekGestureSensitivity = seekGestureSensitivity,
             onEpisodeEnded = onEpisodeEnded,
             modifier = modifier.background(Color.Black)
         )

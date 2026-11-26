@@ -116,6 +116,7 @@ fun ProfileScreen(
     var showAboutSheet by remember { mutableStateOf(false) }
     var showLockUnavailableDialog by remember { mutableStateOf(false) }
     var showLockTimeoutSheet by remember { mutableStateOf(false) }
+    var showSeekSensitivitySheet by remember { mutableStateOf(false) }
     var showImportConfirm by remember { mutableStateOf(false) }
     var cacheSizeBytes by remember { mutableStateOf<Long?>(null) }
     // 从存储空间页清完缓存退回时，副标题的体积要跟着更新
@@ -584,6 +585,29 @@ fun ProfileScreen(
                             )
                         }
                     )
+                    SettingsDivider()
+                    SettingsItem(
+                        icon = AppIcons.SettingsEthernet,
+                        iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        title = stringResource(R.string.profile_seek_sensitivity),
+                        subtitle = seekGestureSensitivityDesc(settings.seekGestureSensitivity),
+                        trailing = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = seekGestureSensitivityLabel(settings.seekGestureSensitivity),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Icon(
+                                    AppIcons.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        onClick = { showSeekSensitivitySheet = true }
+                    )
                 }
             }
 
@@ -645,6 +669,17 @@ fun ProfileScreen(
             onSelect = { timeout ->
                 scope.launch { container.settingsStore.setAppLockTimeout(timeout) }
                 showLockTimeoutSheet = false
+            }
+        )
+    }
+
+    if (showSeekSensitivitySheet) {
+        SeekSensitivitySheet(
+            current = settings.seekGestureSensitivity,
+            onDismiss = { showSeekSensitivitySheet = false },
+            onSelect = { sensitivity ->
+                scope.launch { container.settingsStore.setSeekGestureSensitivity(sensitivity) }
+                showSeekSensitivitySheet = false
             }
         )
     }

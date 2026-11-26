@@ -98,6 +98,7 @@ import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.prefs.ResizeModeOption
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.components.AppSnackbarHost
 import com.av123.video.ui.components.ErrorState
 import com.av123.video.ui.components.LoadingSkeleton
@@ -379,6 +380,7 @@ fun DetailScreen(
                     onResizeModeChange = { mode ->
                         scope.launch { container.settingsStore.setVideoResizeMode(mode) }
                     },
+                    seekGestureSensitivity = appSettings.seekGestureSensitivity,
                     onEpisodeEnded = {
                         // 自动连播（可在"我的-播放设置"关闭）：存在下一集时切换，
                         // 末集或开关关闭时不动作，播放器停留/显示重播
@@ -577,6 +579,7 @@ private fun DetailContent(
     onFlipToExitChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
+    seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
     onEpisodeEnded: () -> Unit = {}
 ) {
     // 列表状态提升在全屏分支之外：进入全屏 LazyColumn 退出组合后，
@@ -611,6 +614,7 @@ private fun DetailContent(
             onFlipToExitChange = onFlipToExitChange,
             resizeMode = resizeMode,
             onResizeModeChange = onResizeModeChange,
+            seekGestureSensitivity = seekGestureSensitivity,
             onEpisodeEnded = onEpisodeEnded,
             episodes = video.episodes,
             onSelectEpisode = onSelectEpisode,

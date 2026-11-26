@@ -148,6 +148,7 @@ import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
 import com.av123.video.data.prefs.ResizeModeOption
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
@@ -168,9 +169,6 @@ private const val PROGRESS_SAVE_INTERVAL_MS = 5_000L
 
 /** 长按播放器临时倍速（主流 App 的“按住快放、松手恢复”交互） */
 private const val LONG_PRESS_SPEED = 2f
-
-/** 横滑 Seek 灵敏度：手指横滑整个画面宽度对应的视频时长占比（拖满整屏 ≈ 80% 时长） */
-private const val HORIZONTAL_SEEK_FRACTION = 0.8f
 
 /** 双击左右半屏快退 / 快进的步长（毫秒） */
 private const val DOUBLE_TAP_SEEK_STEP_MS = 10_000L
@@ -247,7 +245,8 @@ fun VideoPlayer(
     flipToExitEnabled: Boolean = false,
     onFlipToExitChange: (Boolean) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
-    onResizeModeChange: (ResizeModeOption) -> Unit = {}
+    onResizeModeChange: (ResizeModeOption) -> Unit = {},
+    seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -363,6 +362,7 @@ fun VideoPlayer(
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val currentFullscreen by rememberUpdatedState(isFullscreen)
+    val currentSeekSensitivity by rememberUpdatedState(seekGestureSensitivity)
     LaunchedEffect(verticalGestureReleaseTick, verticalGestureVisible) {
         if (verticalGestureVisible && verticalGestureReleaseTick > 0) {
             delay(GESTURE_OVERLAY_LINGER_MS.milliseconds)
@@ -818,11 +818,13 @@ fun VideoPlayer(
                                 seekPreviewStartMs = startPositionMs
                             }
                             accumulatedDx += dragAmount
-                            val widthPx = size.width.toFloat().coerceAtLeast(1f)
-                            val deltaMs =
-                                accumulatedDx / widthPx * duration * HORIZONTAL_SEEK_FRACTION
-                            seekPreviewTargetMs =
-                                (startPositionMs + deltaMs.toLong()).coerceIn(0L, duration)
+                            seekPreviewTargetMs = computeHorizontalSeekTargetMs(
+                                startPositionMs = startPositionMs,
+                                accumulatedDx = accumulatedDx,
+                                widthPx = size.width.toFloat(),
+                                durationMs = duration,
+                                sensitivity = currentSeekSensitivity
+                            )
                         }
                     )
                 }
@@ -923,7 +925,12 @@ fun VideoPlayer(
         if (seekTarget != null && duration > 0L) {
             val fraction = (seekTarget.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
             Layout(
-                content = { SeekTimeBubble(timeText = formatDuration(seekTarget)) },
+                content = {
+                    SeekTimeBubble(
+                        timeText = formatDuration(seekTarget),
+                        deltaText = formatSeekDeltaSeconds(seekPreviewStartMs, seekTarget)
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)

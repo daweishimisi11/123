@@ -198,6 +198,13 @@
     <string name="profile_pip_desc">全屏播放时按 Home 键或切换应用，自动以小窗继续播放</string>
     <string name="profile_auto_next">片尾自动连播</string>
     <string name="profile_auto_next_desc">当前选集播放结束后自动播放下一集</string>
+    <string name="profile_seek_sensitivity">横滑微调灵敏度</string>
+    <string name="profile_seek_sensitivity_fine">精细</string>
+    <string name="profile_seek_sensitivity_standard">适中</string>
+    <string name="profile_seek_sensitivity_fast">较快</string>
+    <string name="profile_seek_sensitivity_fine_desc">划满全屏约 60 秒，适合小幅精准微调</string>
+    <string name="profile_seek_sensitivity_standard_desc">划满全屏约 90 秒（推荐），兼顾微调与流畅性</string>
+    <string name="profile_seek_sensitivity_fast_desc">划满全屏约 3 分钟，适合较长视频快速略过</string>
     <string name="profile_dark_mode">深色模式</string>
     <string name="profile_dark_mode_system">跟随系统</string>
     <string name="profile_dark_mode_light">浅色</string>

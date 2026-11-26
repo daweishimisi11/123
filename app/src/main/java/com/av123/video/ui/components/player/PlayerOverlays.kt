@@ -145,18 +145,21 @@ internal fun Float.formatSpeed(): String =
 
 /**
  * 拖动进度条时跟随小圆点显示目标时间的气泡：
- * 深色圆角底 + 单行白色时间文案，尺寸按文案内容自适应。
+ * 深色圆角底 + 单行白色时间文案（横滑微调时附带相对起点的秒数变化），尺寸按文案内容自适应。
  */
 @Composable
 internal fun SeekTimeBubble(
     timeText: String,
+    deltaText: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Row(
         modifier = modifier
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.52f))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .background(Color.Black.copy(alpha = 0.58f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Text(
             text = timeText,
@@ -165,6 +168,15 @@ internal fun SeekTimeBubble(
             fontWeight = FontWeight.Medium,
             maxLines = 1
         )
+        if (!deltaText.isNullOrBlank()) {
+            Text(
+                text = deltaText,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = AppTypeScale.Caption,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+        }
     }
 }
 

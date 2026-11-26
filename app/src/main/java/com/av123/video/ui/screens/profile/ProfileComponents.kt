@@ -70,6 +70,7 @@ import com.av123.video.R
 import com.av123.video.ui.theme.appCardContainerColor
 import com.av123.video.data.prefs.AppLockTimeout
 import com.av123.video.data.prefs.DarkMode
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
 import com.av123.video.ui.lock.authenticateAppLock
@@ -421,6 +422,70 @@ internal fun AppLockTimeoutSheet(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+internal fun seekGestureSensitivityLabel(sensitivity: SeekGestureSensitivity): String = when (sensitivity) {
+    SeekGestureSensitivity.FINE -> stringResource(R.string.profile_seek_sensitivity_fine)
+    SeekGestureSensitivity.STANDARD -> stringResource(R.string.profile_seek_sensitivity_standard)
+    SeekGestureSensitivity.FAST -> stringResource(R.string.profile_seek_sensitivity_fast)
+}
+
+@Composable
+internal fun seekGestureSensitivityDesc(sensitivity: SeekGestureSensitivity): String = when (sensitivity) {
+    SeekGestureSensitivity.FINE -> stringResource(R.string.profile_seek_sensitivity_fine_desc)
+    SeekGestureSensitivity.STANDARD -> stringResource(R.string.profile_seek_sensitivity_standard_desc)
+    SeekGestureSensitivity.FAST -> stringResource(R.string.profile_seek_sensitivity_fast_desc)
+}
+
+/** 播放器横向滑动手势灵敏度选择底部弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SeekSensitivitySheet(
+    current: SeekGestureSensitivity,
+    onDismiss: () -> Unit,
+    onSelect: (SeekGestureSensitivity) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Text(
+            text = stringResource(R.string.profile_seek_sensitivity),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+        )
+        SeekGestureSensitivity.entries.forEach { sensitivity ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(sensitivity) }
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = current == sensitivity,
+                    onClick = { onSelect(sensitivity) }
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = seekGestureSensitivityLabel(sensitivity),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = seekGestureSensitivityDesc(sensitivity),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         Spacer(Modifier.height(24.dp))

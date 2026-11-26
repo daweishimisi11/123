@@ -3,8 +3,10 @@ package com.av123.video.ui.components.player
 import android.media.AudioManager
 import androidx.compose.ui.Alignment
 import androidx.media3.common.Player
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -145,5 +147,70 @@ class PlayerHelpersTest {
                 hasError = true
             )
         )
+    }
+
+    @Test
+    fun `computeHorizontalSeekTargetMs scales fine scrubbing independently of long duration`() {
+        val oneHourMs = 3_600_000L
+        val startMs = 600_000L
+
+        // 默认适中档（全屏=90s）：划过 10% 屏幕只微调 9 秒，不会因为长片跳几分钟
+        val standard10Pct = computeHorizontalSeekTargetMs(
+            startPositionMs = startMs,
+            accumulatedDx = 100f,
+            widthPx = 1000f,
+            durationMs = oneHourMs,
+            sensitivity = SeekGestureSensitivity.STANDARD
+        )
+        assertEquals(609_000L, standard10Pct)
+
+        // 精细档（全屏=60s）：划过 10% 屏幕微调 6 秒
+        val fine10Pct = computeHorizontalSeekTargetMs(
+            startPositionMs = startMs,
+            accumulatedDx = 100f,
+            widthPx = 1000f,
+            durationMs = oneHourMs,
+            sensitivity = SeekGestureSensitivity.FINE
+        )
+        assertEquals(606_000L, fine10Pct)
+
+        // 较快档（全屏=180s）：划过半屏微调 90 秒
+        val fastHalf = computeHorizontalSeekTargetMs(
+            startPositionMs = startMs,
+            accumulatedDx = -500f,
+            widthPx = 1000f,
+            durationMs = oneHourMs,
+            sensitivity = SeekGestureSensitivity.FAST
+        )
+        assertEquals(510_000L, fastHalf)
+
+        // 极短视频（30s）：上限钳制到视频总时长，不超出
+        val shortClip = computeHorizontalSeekTargetMs(
+            startPositionMs = 10_000L,
+            accumulatedDx = 500f,
+            widthPx = 1000f,
+            durationMs = 30_000L,
+            sensitivity = SeekGestureSensitivity.STANDARD
+        )
+        assertEquals(25_000L, shortClip)
+
+        // 边界钳制：不超过 [0, durationMs]
+        assertEquals(
+            0L,
+            computeHorizontalSeekTargetMs(
+                startPositionMs = 5_000L,
+                accumulatedDx = -800f,
+                widthPx = 1000f,
+                durationMs = oneHourMs,
+                sensitivity = SeekGestureSensitivity.STANDARD
+            )
+        )
+    }
+
+    @Test
+    fun `formatSeekDeltaSeconds formats signed second offsets and omits zero`() {
+        assertNull(formatSeekDeltaSeconds(10_000L, 10_200L))
+        assertEquals("+12s", formatSeekDeltaSeconds(60_000L, 72_000L))
+        assertEquals("-8s", formatSeekDeltaSeconds(60_000L, 52_000L))
     }
 }

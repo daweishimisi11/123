@@ -27,9 +27,11 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.av123.video.data.prefs.ResizeModeOption
+import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.util.findActivity
 
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /** 竖向滑动手势调节手势占屏幕高度的比例（滑过 75% 高度可覆盖全量程） */
 private const val VERTICAL_GESTURE_HEIGHT_FRACTION = 0.75f
@@ -73,6 +75,32 @@ internal fun computeDraggedVolume(
     val nextFraction = (startFraction + delta).coerceIn(0f, 1f)
     val targetIndex = (nextFraction * safeMax).roundToInt().coerceIn(0, safeMax)
     return targetIndex to nextFraction
+}
+
+/**
+ * 计算横滑 Seek 的目标位置（面向几秒到几十秒级微调）：
+ * - 划满全屏宽度对应 [sensitivity.fullSwipeSeconds] 秒，短片自动不超过总时长；
+ * - 脱离视频总长按百分比强缩放，避免长片轻滑一次跳过数分钟。
+ */
+internal fun computeHorizontalSeekTargetMs(
+    startPositionMs: Long,
+    accumulatedDx: Float,
+    widthPx: Float,
+    durationMs: Long,
+    sensitivity: SeekGestureSensitivity
+): Long {
+    if (durationMs <= 0L) return 0L
+    val safeWidth = widthPx.coerceAtLeast(1f)
+    val fullSwipeMs = minOf(sensitivity.fullSwipeSeconds * 1_000L, durationMs).toFloat()
+    val deltaMs = (accumulatedDx / safeWidth) * fullSwipeMs
+    return (startPositionMs + deltaMs.roundToLong()).coerceIn(0L, durationMs)
+}
+
+/** 横滑 Seek 气泡中的相对位移提示（如 "+12s" / "-8s"），未发生整秒位移返回 null */
+internal fun formatSeekDeltaSeconds(startPositionMs: Long, targetPositionMs: Long): String? {
+    val deltaSec = ((targetPositionMs - startPositionMs) / 1_000.0).roundToInt()
+    if (deltaSec == 0) return null
+    return if (deltaSec > 0) "+${deltaSec}s" else "${deltaSec}s"
 }
 
 /** 应用内画面比例枚举 → media3 AspectRatioFrameLayout 常量 */
