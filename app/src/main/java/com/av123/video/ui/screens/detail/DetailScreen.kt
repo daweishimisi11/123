@@ -25,6 +25,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
@@ -100,6 +102,7 @@ import com.av123.video.data.model.Episode
 import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
+import com.av123.video.data.model.VideoVersionLink
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.components.AppSnackbarHost
@@ -377,6 +380,10 @@ fun DetailScreen(
                     canLoadMoreRelated = canLoadMoreRelated,
                     onLoadMoreRelated = detailViewModel::loadMoreRelated,
                     onVideoClick = onVideoClick,
+                    onSwitchVersion = { version ->
+                        container.videoRepository.rememberDetailPath(version.videoId, version.path)
+                        onVideoClick(version.videoId)
+                    },
                     onPlaybackReady = detailViewModel::onPlaybackReady,
                     onPlaybackError = detailViewModel::onPlaybackError,
                     startPositionMs = resumePositionMs,
@@ -581,6 +588,7 @@ private fun DetailContent(
     canLoadMoreRelated: Boolean,
     onLoadMoreRelated: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onSwitchVersion: (VideoVersionLink) -> Unit,
     onPlaybackReady: () -> Unit,
     onPlaybackError: () -> Unit,
     startPositionMs: Long,
@@ -662,7 +670,8 @@ private fun DetailContent(
                         relatedLoading = relatedLoading,
                         canLoadMoreRelated = canLoadMoreRelated,
                         onLoadMoreRelated = onLoadMoreRelated,
-                        onVideoClick = onVideoClick
+                        onVideoClick = onVideoClick,
+                        onSwitchVersion = onSwitchVersion
                     )
                 }
             }
@@ -687,7 +696,8 @@ private fun DetailBody(
     relatedLoading: Boolean,
     canLoadMoreRelated: Boolean,
     onLoadMoreRelated: () -> Unit,
-    onVideoClick: (String) -> Unit
+    onVideoClick: (String) -> Unit,
+    onSwitchVersion: (VideoVersionLink) -> Unit = {}
 ) {
     val haptics = rememberAppHaptics()
     val configuration = LocalConfiguration.current
@@ -747,44 +757,79 @@ private fun DetailBody(
             label = "favoriteButtonContent"
         )
         val favoriteHeartScale = rememberTogglePopScale(active = isFavorite)
-        Button(
-            onClick = {
-                haptics.tick()
-                onToggleFavorite()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = favoriteContainer,
-                contentColor = favoriteContent
-            )
-        ) {
-            Icon(
-                imageVector = if (isFavorite) {
-                    AppIcons.Favorite
-                } else {
-                    AppIcons.FavoriteBorder
+        val favoriteButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+            Button(
+                onClick = {
+                    haptics.tick()
+                    onToggleFavorite()
                 },
-                contentDescription = null,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = favoriteHeartScale
-                    scaleY = favoriteHeartScale
-                }
-            )
-            Spacer(Modifier.size(8.dp))
-            AnimatedContent(
-                targetState = isFavorite,
-                transitionSpec = {
-                    fadeIn(animationSpec = Motion.FadeThrough) togetherWith
-                        fadeOut(animationSpec = Motion.Overlay)
-                },
-                label = "favoriteLabel"
-            ) { favorited ->
-                Text(
-                    stringResource(
-                        if (favorited) R.string.detail_favorited
-                        else R.string.detail_favorite
-                    )
+                modifier = buttonModifier,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = favoriteContainer,
+                    contentColor = favoriteContent
                 )
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) {
+                        AppIcons.Favorite
+                    } else {
+                        AppIcons.FavoriteBorder
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = favoriteHeartScale
+                        scaleY = favoriteHeartScale
+                    }
+                )
+                Spacer(Modifier.size(8.dp))
+                AnimatedContent(
+                    targetState = isFavorite,
+                    transitionSpec = {
+                        fadeIn(animationSpec = Motion.FadeThrough) togetherWith
+                            fadeOut(animationSpec = Motion.Overlay)
+                    },
+                    label = "favoriteLabel"
+                ) { favorited ->
+                    Text(
+                        stringResource(
+                            if (favorited) R.string.detail_favorited
+                            else R.string.detail_favorite
+                        )
+                    )
+                }
+            }
+        }
+        val alternateVersions = video.alternateVersions
+        when (alternateVersions.size) {
+            0 -> favoriteButton(Modifier.fillMaxWidth())
+            1 -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                favoriteButton(Modifier.weight(1f))
+                val targetVersion = alternateVersions.first()
+                DetailVersionSwitchButton(
+                    version = targetVersion,
+                    onClick = { onSwitchVersion(targetVersion) }
+                )
+            }
+            else -> {
+                favoriteButton(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(10.dp))
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    alternateVersions.forEach { targetVersion ->
+                        DetailVersionSwitchButton(
+                            version = targetVersion,
+                            onClick = { onSwitchVersion(targetVersion) }
+                        )
+                    }
+                }
             }
         }
 

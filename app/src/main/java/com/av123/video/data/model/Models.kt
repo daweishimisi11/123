@@ -46,12 +46,27 @@ data class Video(
     val viewsText: String = "",
     val publishedAgo: String = "",
     /** 详情页信息行（代码/类型/发布日期/演员/制作商/系列/类别/标签…），按网页顺序排列 */
-    val infoRows: List<VideoInfoRow> = emptyList()
+    val infoRows: List<VideoInfoRow> = emptyList(),
+    /** 同片其他版本快捷跳转（仅网页存在对应链接时填充，如 有码 <-> 无码流出） */
+    val alternateVersions: List<VideoVersionLink> = emptyList()
 ) {
     /** 观看数展示文本：优先使用页面原文，否则按数值格式化为 K/M */
     val viewsDisplay: String
         get() = viewsText.ifBlank { if (views > 0L) formatViewCount(views) else "" }
 }
+
+/**
+ * 同片其他版本快捷跳转（如 有码 <-> 无码流出）：
+ * - [videoId] 目标影片详情 slug（如 "ipx-589-uncensored-leaked" / "ipx-589"）
+ * - [label]   按钮展示文案（如 "无码流出" / "无码版" / "有码版"）
+ * - [path]    站点相对路径（如 "/cn/v/ipx-589-uncensored-leaked"）
+ */
+@Serializable
+data class VideoVersionLink(
+    val videoId: String,
+    val label: String,
+    val path: String
+)
 
 /**
  * 选集条目：

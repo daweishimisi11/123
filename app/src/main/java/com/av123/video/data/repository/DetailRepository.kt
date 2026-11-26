@@ -8,6 +8,7 @@ import com.av123.video.data.net.ErrorReporter
 import com.av123.video.data.runCatchingCancellable
 import com.av123.video.data.source.VideoSite
 import kotlinx.coroutines.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 详情加载结果：网络失败时仍可能带回列表缓存条目（cached），
@@ -41,6 +42,14 @@ class DetailRepository(
     private val errorReporter: ErrorReporter,
     private val cachedVideoProvider: (String) -> Video?
 ) {
+    /** 同片切换版本时暂存目标站内相对路径，确保首跳按原链接精确抓取 */
+    private val pendingDetailPaths = ConcurrentHashMap<String, String>()
+
+    fun rememberDetailPath(videoId: String, path: String) {
+        if (videoId.isNotBlank() && path.isNotBlank()) {
+            pendingDetailPaths[videoId] = path
+        }
+    }
     /**
      * 按 id 获取详情（SWR：先磁盘后网络）：
      * 1. 有磁盘详情缓存：立即返回缓存；缓存时间超过 [DETAIL_STALE_MS] 时置 staleFromDisk，
@@ -86,9 +95,10 @@ class DetailRepository(
         reportFailureSnackbar: Boolean
     ): DetailResult {
         val cached = cachedVideoProvider(videoId)
+        val pendingPath = pendingDetailPaths.remove(videoId).orEmpty()
         val detail = try {
             dataSource.fetchVideoDetail(
-                cached ?: Video(id = videoId, title = videoId, category = "")
+                cached ?: Video(id = videoId, title = videoId, category = "", detailPath = pendingPath)
             )
         } catch (e: CancellationException) {
             throw e
@@ -136,7 +146,8 @@ class DetailRepository(
         views = if (detail.views > 0) detail.views else base.views,
         publishedAgo = detail.publishedAgo.ifBlank { base.publishedAgo },
         sourcePageUrl = detail.sourcePageUrl.ifBlank { base.sourcePageUrl },
-        detailPath = detail.detailPath.ifBlank { base.detailPath }
+        detailPath = detail.detailPath.ifBlank { base.detailPath },
+        alternateVersions = detail.alternateVersions
     )
 
     companion object {

@@ -268,6 +268,59 @@ class JsoupParserTest {
         assertEquals("Aiko", actressRow.chips.first().text)
         assertEquals("/cn/actresses/aiko", actressRow.chips.first().path)
         assertEquals("https://123av.com/cn/v/siro-5733", detail.sourcePageUrl)
+        assertTrue(detail.alternateVersions.isEmpty())
+    }
+
+    @Test
+    fun parseDetailDocument_extractsAlternateCensoredAndUncensoredVersionsOnlyFromDetailArea() {
+        val html = """
+            <html><body>
+            <h1 class="watch__title">IPX-589 测试影片</h1>
+            <div class="watch__acts">
+              <a href="/cn/v/ipx-589-uncensored-leaked">无码流出</a>
+            </div>
+            <div class="watch__info-row"><dt>类型</dt><dd><a href="/cn/censored">有码</a></dd></div>
+            <aside class="watch-side">
+              <a class="vside" href="/cn/v/other-111-uncensored-leaked"><span class="vside__title">其他推荐无码</span></a>
+            </aside>
+            <section class="related">
+              <div class="card"><a class="card__cover" href="/cn/v/other-222-uncensored-leaked"></a></div>
+            </section>
+            </body></html>
+        """.trimIndent()
+
+        val censoredDoc = source.parseDetailDocument(
+            Jsoup.parse(html, "https://123av.com/"),
+            Video(id = "ipx-589", title = "IPX-589", category = ""),
+            resolvedUrl = "https://123av.com/cn/v/ipx-589"
+        )
+        requireNotNull(censoredDoc)
+        assertEquals(1, censoredDoc.alternateVersions.size)
+        val uncensored = censoredDoc.alternateVersions.first()
+        assertEquals("ipx-589-uncensored-leaked", uncensored.videoId)
+        assertEquals("无码流出", uncensored.label)
+        assertEquals("/cn/v/ipx-589-uncensored-leaked", uncensored.path)
+        // 普通分类链接 /cn/censored 仍保留在 infoRows 胶囊中
+        assertEquals(1, censoredDoc.infoRows.first().chips.size)
+
+        val reverseHtml = """
+            <html><body>
+            <h1 class="watch__title">IPX-589 无码版</h1>
+            <div class="watch__info-row"><dt>版本</dt><dd><a href="https://123av.com/cn/v/ipx-589">有码</a></dd></div>
+            </body></html>
+        """.trimIndent()
+        val uncensoredDoc = source.parseDetailDocument(
+            Jsoup.parse(reverseHtml, "https://123av.com/"),
+            Video(id = "ipx-589-uncensored-leaked", title = "IPX-589", category = ""),
+            resolvedUrl = "https://123av.com/cn/v/ipx-589-uncensored-leaked"
+        )
+        requireNotNull(uncensoredDoc)
+        assertEquals(1, uncensoredDoc.alternateVersions.size)
+        val censored = uncensoredDoc.alternateVersions.first()
+        assertEquals("ipx-589", censored.videoId)
+        assertEquals("有码版", censored.label)
+        assertEquals("/cn/v/ipx-589", censored.path)
+        assertTrue(uncensoredDoc.infoRows.first().chips.isEmpty())
     }
 
     @Test

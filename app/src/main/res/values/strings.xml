@@ -268,6 +268,7 @@
     <string name="detail_not_found">内容不存在或已下线</string>
     <string name="detail_back">返回</string>
     <string name="detail_share">分享视频链接</string>
+    <string name="detail_switch_version_cd">切换至%1$s</string>
     <string name="detail_auto_next">正在播放下一集…</string>
 
     <!-- 全局错误提示（错误类型归一化后统一文案，避免暴露英文异常信息） -->

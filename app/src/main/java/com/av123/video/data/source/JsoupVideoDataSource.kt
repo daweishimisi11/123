@@ -10,6 +10,7 @@ import com.av123.video.data.model.NavChannel
 import com.av123.video.data.model.NavChannelGroup
 import com.av123.video.data.model.Pagination
 import com.av123.video.data.model.Video
+import com.av123.video.data.model.VideoVersionLink
 import com.av123.video.data.model.FilterGroup
 import com.av123.video.data.model.FilterOption
 import com.av123.video.data.db.AppJson
@@ -435,7 +436,8 @@ class JsoupVideoDataSource(
             val chips = dd.select("a[href]").mapNotNull { a ->
                 val name = a.text().trim()
                 val path = toSitePath(a.attr("href"))
-                if (name.isBlank() || path.isBlank()) null else InfoChip(name, path)
+                if (name.isBlank() || path.isBlank() || extractVideoSlugFromPath(path) != null) null
+                else InfoChip(name, path)
             }
             VideoInfoRow(
                 label = label,
@@ -462,6 +464,8 @@ class JsoupVideoDataSource(
                     .orEmpty()
             }
 
+        val alternateVersions = parseAlternateVersions(doc, resolvedUrl, reference.id)
+
         if (title.isBlank() && rows.isEmpty() && player.episodes.isEmpty()) return null
         return Video(
             id = reference.id,
@@ -478,6 +482,7 @@ class JsoupVideoDataSource(
             year = year,
             synopsis = synopsis,
             infoRows = rows,
+            alternateVersions = alternateVersions,
             episodeCount = player.episodes.size.coerceAtLeast(1),
             durationText = reference.durationText,
             views = parseViews(viewsText),
@@ -749,6 +754,144 @@ class JsoupVideoDataSource(
             timeoutMs = config.timeoutMs
         )
         return Jsoup.parse(html, url)
+    }
+
+    /**
+     * 解析详情页主体中的同片其他版本快捷跳转（如 有码 <-> 无码流出）：
+     * - 只认详情主体区域内指向本站影片详情页（`/{locale?}/{videoPathSegment}/{slug}`）的链接，
+     *   排除侧栏、推荐卡片、template、导航、页脚、分页与简介正文；
+     * - 排除当前影片自身，并通过同基编号（如 `ipx-589` <-> `ipx-589-uncensored-leaked`）
+     *   或明确的版本关键词（有码/无码/uncensored/censored）筛选；
+     * - 网页未提供其他版本时返回空列表，UI 不渲染按钮。
+     */
+    private fun parseAlternateVersions(
+        doc: Document,
+        resolvedUrl: String,
+        fallbackId: String
+    ): List<VideoVersionLink> {
+        val currentSlug = extractVideoSlugFromPath(toSitePath(resolvedUrl))
+            ?: fallbackId.trim()
+        if (currentSlug.isBlank()) return emptyList()
+        val currentBaseSlug = normalizeVersionBaseSlug(currentSlug)
+        val seen = linkedSetOf<String>()
+
+        return doc.select("a[href]").mapNotNull { a ->
+            if (a.isInsideNonDetailRegion()) return@mapNotNull null
+            val path = toSitePath(a.attr("href"))
+            val targetSlug = extractVideoSlugFromPath(path) ?: return@mapNotNull null
+            if (targetSlug.equals(currentSlug, ignoreCase = true)) return@mapNotNull null
+
+            val text = a.text().trim()
+            val hintText = buildString {
+                append(text).append(' ')
+                append(a.attr("title")).append(' ')
+                append(a.attr("aria-label")).append(' ')
+                append(a.closest(config.detailInfoRow)?.selectFirst(config.detailInfoLabel)?.text().orEmpty())
+            }
+            val sameBase = currentBaseSlug.isNotBlank() &&
+                normalizeVersionBaseSlug(targetSlug).equals(currentBaseSlug, ignoreCase = true)
+            if (!sameBase && !hasVersionKeyword(hintText)) return@mapNotNull null
+
+            val key = targetSlug.lowercase()
+            if (!seen.add(key)) return@mapNotNull null
+            VideoVersionLink(
+                videoId = targetSlug,
+                label = resolveVersionLabel(
+                    anchorText = text,
+                    targetSlug = targetSlug,
+                    currentSlug = currentSlug
+                ),
+                path = path
+            )
+        }
+    }
+
+    private fun Element.isInsideNonDetailRegion(): Boolean =
+        hasClass("vside") ||
+            hasClass("card__cover") ||
+            parents().any { parent ->
+                val tag = parent.tagName().lowercase()
+                tag == "template" ||
+                    tag == "nav" ||
+                    tag == "header" ||
+                    tag == "footer" ||
+                    tag == "aside" ||
+                    parent.hasClass("watch-side") ||
+                    parent.hasClass("related") ||
+                    parent.hasClass("card") ||
+                    parent.hasClass("pager") ||
+                    parent.hasClass("watch__desc-text")
+            }
+
+    private fun extractVideoSlugFromPath(path: String): String? {
+        val clean = path.substringBefore('?').substringBefore('#').trimEnd('/')
+        if (clean.isBlank()) return null
+        val seg = Regex.escape(config.videoPathSegment)
+        val match = Regex("""^(?:/[a-zA-Z]{2,5})?/$seg/([^/]+)$""").find(clean)
+        return match?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
+    private fun normalizeVersionBaseSlug(slug: String): String {
+        var result = slug.trim().lowercase().trimEnd('-')
+        val suffixes = listOf(
+            "-uncensored-leaked",
+            "-uncensored-leak",
+            "-uncensored",
+            "-censored",
+            "-leaked",
+            "-leak",
+            "-chinese-subtitle",
+            "-cn-sub",
+            "-sub"
+        )
+        var changed: Boolean
+        do {
+            changed = false
+            for (suffix in suffixes) {
+                if (result.endsWith(suffix) && result.length > suffix.length) {
+                    result = result.removeSuffix(suffix).trimEnd('-')
+                    changed = true
+                    break
+                }
+            }
+        } while (changed)
+        return result
+    }
+
+    private fun hasVersionKeyword(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.contains("无码") ||
+            lower.contains("無碼") ||
+            lower.contains("有码") ||
+            lower.contains("有碼") ||
+            lower.contains("uncensored") ||
+            lower.contains("censored") ||
+            lower.contains("版本")
+    }
+
+    private fun resolveVersionLabel(
+        anchorText: String,
+        targetSlug: String,
+        currentSlug: String
+    ): String {
+        val raw = anchorText.trim()
+        val lowerRaw = raw.lowercase()
+        val lowerTarget = targetSlug.lowercase()
+        return when {
+            lowerRaw.contains("无码流出") || lowerRaw.contains("無碼流出") ||
+                lowerRaw.contains("leaked") ||
+                lowerTarget.endsWith("-uncensored-leaked") ||
+                lowerTarget.endsWith("-uncensored-leak") -> "无码流出"
+            lowerRaw.contains("无码") || lowerRaw.contains("無碼") ||
+                lowerRaw.contains("uncensored") ||
+                lowerTarget.endsWith("-uncensored") -> "无码版"
+            lowerRaw.contains("有码") || lowerRaw.contains("有碼") ||
+                (lowerRaw.contains("censored") && !lowerRaw.contains("uncensored")) -> "有码版"
+            currentSlug.lowercase().contains("uncensored") &&
+                !lowerTarget.contains("uncensored") -> "有码版"
+            raw.isNotBlank() && raw.length <= 12 -> raw
+            else -> "其他版本"
+        }
     }
 
     /** baseUrl 与路径拼接，自动收拢首尾斜杠，避免出现 "site.com//cn/v/.." 双斜杠 */

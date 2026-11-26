@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -104,6 +105,7 @@ import com.av123.video.data.model.Episode
 import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
+import com.av123.video.data.model.VideoVersionLink
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.components.ErrorState
@@ -425,6 +427,39 @@ internal data class DetailTextMetrics(
     val videoTitleFontSp: Float,
     val videoTitleLineHeightSp: Float
 )
+
+/**
+ * 详情页同片其他版本快捷跳转按钮（如 有码 <-> 无码流出）：
+ * 仅在网页提供对应版本链接时渲染，未提供时不占用空间。
+ */
+@Composable
+internal fun DetailVersionSwitchButton(
+    version: VideoVersionLink,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptics = rememberAppHaptics()
+    FilledTonalButton(
+        onClick = {
+            haptics.tick()
+            onClick()
+        },
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+    ) {
+        Icon(
+            imageVector = AppIcons.SwapHoriz,
+            contentDescription = stringResource(R.string.detail_switch_version_cd, version.label),
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = version.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
 
 /**
  * 详情页自适应字号：竖屏紧凑屏上把顶栏番号和片名调小到「略大于简介（14sp）」的区间，

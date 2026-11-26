@@ -144,6 +144,11 @@ class VideoRepository(
         playbackCache.invalidate(videoId, episodeIndex)
     }
 
+    /** 记录版本快捷跳转的精确相对路径，供下一次详情请求直接使用 */
+    fun rememberDetailPath(videoId: String, path: String) {
+        detailRepository.rememberDetailPath(videoId, path)
+    }
+
     /** 按 id 获取详情（先磁盘后网络的 SWR，详见 [DetailRepository.getVideo]） */
     suspend fun getVideo(videoId: String): DetailResult = detailRepository.getVideo(videoId)
 
