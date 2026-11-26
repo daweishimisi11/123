@@ -228,6 +228,37 @@ internal fun parseVideoTracks(tracks: Tracks): List<VideoTrack> {
     return result.sortedByDescending { it.height }
 }
 
+/** 将视频高度规范化为紧凑清晰度文案（如 480p / 720p / 1080p）；无效高度返回 null */
+internal fun formatResolutionBadge(height: Int): String? =
+    height.takeIf { it > 0 }?.let { "${it}p" }
+
+/** 底部清晰度按钮文案：手动锁定某轨道时显示轨道名，自动档直接展示当前实际播放分辨率 */
+internal fun resolveAutoTrackButtonLabel(
+    selectedTrack: VideoTrack?,
+    activeHeight: Int,
+    autoFallbackLabel: String
+): String = selectedTrack?.label ?: formatResolutionBadge(activeHeight) ?: autoFallbackLabel
+
+/** 清晰度菜单内“自动”条目文案：当前分辨率已知时显示“自动 (720p)”以便区分档位 */
+internal fun resolveAutoTrackMenuLabel(
+    autoLabel: String,
+    activeHeight: Int
+): String = formatResolutionBadge(activeHeight)?.let { "$autoLabel ($it)" } ?: autoLabel
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun resolveSelectedVideoHeight(tracks: Tracks): Int {
+    tracks.groups.forEach { group ->
+        if (group.type != C.TRACK_TYPE_VIDEO) return@forEach
+        for (trackIndex in 0 until group.length) {
+            if (group.isTrackSelected(trackIndex)) {
+                val height = group.getTrackFormat(trackIndex).height
+                if (height > 0) return height
+            }
+        }
+    }
+    return 0
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun buildTrackSelectionParameters(
     currentParameters: TrackSelectionParameters,

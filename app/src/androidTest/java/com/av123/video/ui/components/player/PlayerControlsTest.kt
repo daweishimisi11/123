@@ -5,8 +5,10 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.av123.video.data.model.Episode
 import com.av123.video.data.prefs.ResizeModeOption
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,14 +20,11 @@ class PlayerControlsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun settingsSheet_excludesPlaybackSpeedControls() {
+    fun settingsSheet_excludesPlaybackSpeedAndEpisodeControls() {
         composeRule.setContent {
             SettingsSheet(
                 resizeMode = ResizeModeOption.FIT,
                 onResizeModeChange = {},
-                episodes = emptyList(),
-                selectedEpisodeIndex = 0,
-                onSelectEpisode = {},
                 autoPlayNext = true,
                 onAutoPlayNextChange = {},
                 flipToExitEnabled = false,
@@ -39,6 +38,47 @@ class PlayerControlsTest {
         composeRule.onNodeWithText("画面比例").assertIsDisplayed()
         composeRule.onNodeWithText("倍速").assertDoesNotExist()
         composeRule.onNodeWithText("1.5x").assertDoesNotExist()
+        composeRule.onNodeWithText("选集").assertDoesNotExist()
+    }
+
+    @Test
+    fun episodeSheet_onlyListsEpisodesAndSelectsTarget() {
+        var picked = -1
+        var dismissed = false
+        composeRule.setContent {
+            EpisodeSheet(
+                episodes = listOf(
+                    Episode(name = "正片1", url = "https://example.com/1"),
+                    Episode(name = "正片2", url = "https://example.com/2")
+                ),
+                selectedEpisodeIndex = 0,
+                onSelectEpisode = { picked = it },
+                onDismiss = { dismissed = true }
+            )
+        }
+
+        composeRule.onNodeWithText("选集").assertIsDisplayed()
+        composeRule.onNodeWithText("正片2").assertIsDisplayed().performClick()
+        assertEquals(1, picked)
+        assertTrue(dismissed)
+        composeRule.onNodeWithText("播放设置").assertDoesNotExist()
+        composeRule.onNodeWithText("画面比例").assertDoesNotExist()
+    }
+
+    @Test
+    fun trackPopupMenu_autoDisplaysActiveResolution() {
+        composeRule.setContent {
+            TrackPopupMenu(
+                expanded = true,
+                tracks = emptyList(),
+                selected = null,
+                activeHeight = 720,
+                onSelected = {},
+                onDismiss = {}
+            )
+        }
+
+        composeRule.onNodeWithText("自动 (720p)").assertIsDisplayed()
     }
 
     @Test

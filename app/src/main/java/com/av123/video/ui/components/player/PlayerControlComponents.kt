@@ -299,10 +299,14 @@ internal fun TrackPopupMenu(
     expanded: Boolean,
     tracks: List<VideoTrack>,
     selected: VideoTrack?,
+    activeHeight: Int = 0,
     onSelected: (VideoTrack?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val autoLabel = stringResource(R.string.player_track_auto)
+    val autoLabel = resolveAutoTrackMenuLabel(
+        autoLabel = stringResource(R.string.player_track_auto),
+        activeHeight = activeHeight
+    )
     CapsulePopupMenu(expanded = expanded, onDismiss = onDismiss) {
         DropdownMenuItem(
             text = {

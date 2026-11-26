@@ -279,4 +279,36 @@ class PlayerHelpersTest {
         assertTrue(isWithinPlayerGestureSafeZone(300f, 150f, width, height, vDead, hDead))
         assertTrue(isWithinPlayerGestureSafeZone(2000f, 930f, width, height, vDead, hDead))
     }
+
+    @Test
+    fun `auto track resolution labels show active height directly and fallback cleanly`() {
+        assertEquals("720p", formatResolutionBadge(720))
+        assertEquals(null, formatResolutionBadge(0))
+
+        // 自动档已识别当前播放高度时，底部直接显示分辨率（480p / 720p / 1080p）
+        assertEquals(
+            "720p",
+            resolveAutoTrackButtonLabel(
+                selectedTrack = null,
+                activeHeight = 720,
+                autoFallbackLabel = "自动"
+            )
+        )
+        assertEquals(
+            "自动",
+            resolveAutoTrackButtonLabel(
+                selectedTrack = null,
+                activeHeight = 0,
+                autoFallbackLabel = "自动"
+            )
+        )
+        assertEquals(
+            "自动 (1080p)",
+            resolveAutoTrackMenuLabel(autoLabel = "自动", activeHeight = 1080)
+        )
+        assertEquals(
+            "自动",
+            resolveAutoTrackMenuLabel(autoLabel = "自动", activeHeight = 0)
+        )
+    }
 }

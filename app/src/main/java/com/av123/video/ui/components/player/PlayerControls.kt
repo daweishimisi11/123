@@ -180,6 +180,7 @@ internal fun PlayerControls(
     selectedSpeed: Float,
     availableTracks: List<VideoTrack>,
     selectedTrack: VideoTrack?,
+    activeTrackHeight: Int = 0,
     episodes: List<Episode>,
     selectedEpisodeIndex: Int,
     onTitleBack: () -> Unit,
@@ -221,6 +222,7 @@ internal fun PlayerControls(
     }
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showTrackSheet by remember { mutableStateOf(false) }
+    var showEpisodeSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var volume by remember {
         mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
@@ -268,9 +270,17 @@ internal fun PlayerControls(
 
     val effectivelyMuted = isMuted || volume == 0
 
-    LaunchedEffect(showSpeedSheet, showTrackSheet, showSettingsSheet) {
+    LaunchedEffect(isFullscreen) {
+        if (!isFullscreen) {
+            showEpisodeSheet = false
+            showSettingsSheet = false
+            showTrackSheet = false
+        }
+    }
+
+    LaunchedEffect(showSpeedSheet, showTrackSheet, showEpisodeSheet, showSettingsSheet) {
         onControlPopupVisibleChange(
-            showSpeedSheet || showTrackSheet || showSettingsSheet
+            showSpeedSheet || showTrackSheet || showEpisodeSheet || showSettingsSheet
         )
     }
 
@@ -345,8 +355,9 @@ internal fun PlayerControls(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // 设置面板打开时，返回键先关面板，不直接退出全屏
-    BackHandler(enabled = showSettingsSheet) {
+    // 选集或设置面板打开时，返回键先关面板，不直接退出全屏
+    BackHandler(enabled = showEpisodeSheet || showSettingsSheet) {
+        showEpisodeSheet = false
         showSettingsSheet = false
     }
 
@@ -425,6 +436,7 @@ internal fun PlayerControls(
                         IconButton(
                             onClick = {
                                 haptics.tick()
+                                showEpisodeSheet = false
                                 showSettingsSheet = true
                             },
                             modifier = Modifier.size(40.dp)
@@ -548,13 +560,14 @@ internal fun PlayerControls(
                     )
                 }
 
-                // 选集：只在全屏且确实有多集时出现，紧挨倍速右侧；点开右侧设置面板
+                // 选集：只在全屏且确实有多集时出现，紧挨倍速右侧；独立弹出选集抽屉
                 if (isFullscreen && episodes.size > 1) {
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(
                         onClick = {
                             haptics.tick()
-                            showSettingsSheet = true
+                            showSettingsSheet = false
+                            showEpisodeSheet = true
                         },
                         shape = AppShapes.Large,
                         colors = ButtonDefaults.textButtonColors(
@@ -590,19 +603,24 @@ internal fun PlayerControls(
                             modifier = Modifier.height(30.dp)
                         ) {
                             Text(
-                                text = selectedTrack?.label ?: trackAutoLabel,
+                                text = resolveAutoTrackButtonLabel(
+                                    selectedTrack = selectedTrack,
+                                    activeHeight = activeTrackHeight,
+                                    autoFallbackLabel = trackAutoLabel
+                                ),
                                 color = Color.White,
                                 fontSize = AppTypeScale.Label,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 72.dp)
+                                modifier = Modifier.widthIn(max = 88.dp)
                             )
                         }
                         TrackPopupMenu(
                             expanded = showTrackSheet,
                             tracks = availableTracks,
                             selected = selectedTrack,
+                            activeHeight = activeTrackHeight,
                             onSelected = {
                                 onTrackSelected(it)
                                 showTrackSheet = false
@@ -683,36 +701,32 @@ internal fun PlayerControls(
             }
         }
 
-        // 全屏设置：右侧滑出面板 + 可点关闭的遮罩
-        AnimatedVisibility(
-            visible = showSettingsSheet,
-            enter = fadeIn(Motion.Overlay),
-            exit = fadeOut(Motion.Overlay)
+        // 独立选集抽屉（仅在点击底部选集按钮时打开，专用于选集）
+        PlayerSideSheetDrawer(
+            visible = showEpisodeSheet,
+            onDismiss = { showEpisodeSheet = false },
+            modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { showSettingsSheet = false }
+            EpisodeSheet(
+                episodes = episodes,
+                selectedEpisodeIndex = selectedEpisodeIndex,
+                onSelectEpisode = { index ->
+                    onSelectEpisode(index)
+                    showEpisodeSheet = false
+                },
+                onDismiss = { showEpisodeSheet = false }
             )
         }
-        AnimatedVisibility(
+
+        // 全屏设置：右侧滑出面板 + 可点关闭的遮罩
+        PlayerSideSheetDrawer(
             visible = showSettingsSheet,
-            enter = slideInHorizontally(Motion.overlay<IntOffset>()) { it } +
-                fadeIn(Motion.Overlay),
-            exit = slideOutHorizontally(Motion.overlay<IntOffset>()) { it } +
-                fadeOut(Motion.Overlay),
+            onDismiss = { showSettingsSheet = false },
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
             SettingsSheet(
                 resizeMode = resizeMode,
                 onResizeModeChange = onResizeModeChange,
-                episodes = episodes,
-                selectedEpisodeIndex = selectedEpisodeIndex,
-                onSelectEpisode = onSelectEpisode,
                 autoPlayNext = autoPlayNext,
                 onAutoPlayNextChange = onAutoPlayNextChange,
                 flipToExitEnabled = flipToExitEnabled,
@@ -728,14 +742,122 @@ internal fun PlayerControls(
 
 }
 
-/** 全屏设置：右侧滑出面板，B 站式标题 + 行式配置（倍速由底部倍速按钮独立调节） */
+@Composable
+private fun PlayerSideSheetDrawer(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(Motion.Overlay),
+        exit = fadeOut(Motion.Overlay)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                )
+        )
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInHorizontally(Motion.overlay<IntOffset>()) { it } +
+            fadeIn(Motion.Overlay),
+        exit = slideOutHorizontally(Motion.overlay<IntOffset>()) { it } +
+            fadeOut(Motion.Overlay),
+        modifier = modifier
+    ) {
+        content()
+    }
+}
+
+/** 独立选集抽屉：点击底部选集按钮打开，只展示剧集选择 */
+@Composable
+internal fun EpisodeSheet(
+    episodes: List<Episode>,
+    selectedEpisodeIndex: Int,
+    onSelectEpisode: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(280.dp)
+            .fillMaxHeight()
+            .background(Color(0xFF171214))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.player_episodes),
+                color = Color.White,
+                fontSize = AppTypeScale.BodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = AppIcons.Close,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            episodes.indices.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { index ->
+                        val selected = index == selectedEpisodeIndex
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(AppShapes.Small)
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else Color.White.copy(alpha = 0.08f)
+                                )
+                                .clickable {
+                                    onSelectEpisode(index)
+                                    onDismiss()
+                                }
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = episodes[index].name.ifBlank {
+                                    stringResource(R.string.detail_episode_n, index + 1)
+                                },
+                                color = if (selected) Color.White
+                                else Color.White.copy(alpha = 0.78f),
+                                fontSize = AppTypeScale.Label,
+                                fontWeight = if (selected) FontWeight.SemiBold
+                                else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/** 全屏设置：右侧滑出面板，倍速由底部倍速按钮控制、选集由底部选集按钮独立控制 */
 @Composable
 internal fun SettingsSheet(
     resizeMode: ResizeModeOption,
     onResizeModeChange: (ResizeModeOption) -> Unit,
-    episodes: List<Episode>,
-    selectedEpisodeIndex: Int,
-    onSelectEpisode: (Int) -> Unit,
     autoPlayNext: Boolean,
     onAutoPlayNextChange: (Boolean) -> Unit,
     flipToExitEnabled: Boolean,
@@ -803,55 +925,6 @@ internal fun SettingsSheet(
                         else FontWeight.Normal,
                         maxLines = 1
                     )
-                }
-            }
-        }
-        // 选集：画面比例下方，只在多集时出现；点一集即切换并收起面板
-        if (episodes.size > 1) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = stringResource(R.string.player_episodes),
-                color = Color.White.copy(alpha = 0.55f),
-                fontSize = AppTypeScale.Label
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                episodes.indices.chunked(4).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { index ->
-                            val selected = index == selectedEpisodeIndex
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp)
-                                    .clip(AppShapes.Small)
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primary
-                                        else Color.White.copy(alpha = 0.08f)
-                                    )
-                                    .clickable {
-                                        onSelectEpisode(index)
-                                        onDismiss()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = episodes[index].name.ifBlank {
-                                        stringResource(R.string.detail_episode_n, index + 1)
-                                    },
-                                    color = if (selected) Color.White
-                                    else Color.White.copy(alpha = 0.75f),
-                                    fontSize = AppTypeScale.Label,
-                                    fontWeight = if (selected) FontWeight.SemiBold
-                                    else FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                        // 最后一行不足 4 个时用空位撑住，避免格子被拉宽
-                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
                 }
             }
         }

@@ -139,6 +139,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -344,6 +345,7 @@ fun VideoPlayer(
     var isLongPressSpeed by remember(player) { mutableStateOf(false) }
     var availableTracks by remember { mutableStateOf<List<VideoTrack>>(emptyList()) }
     var selectedTrack by remember { mutableStateOf<VideoTrack?>(null) }
+    var activeTrackHeight by remember(player) { mutableIntStateOf(0) }
     // 播放统计浮层（类似 YouTube “统计信息”）
     var showPlaybackStats by remember { mutableStateOf(false) }
     // 横滑 Seek：松手将跳转到的目标位置（null=未拖动）；以 player 为 key，
@@ -521,6 +523,16 @@ fun VideoPlayer(
 
             override fun onTracksChanged(tracks: Tracks) {
                 availableTracks = parseVideoTracks(tracks)
+                val selectedHeight = resolveSelectedVideoHeight(tracks)
+                if (selectedHeight > 0) activeTrackHeight = selectedHeight
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val tracksHeight = resolveSelectedVideoHeight(player.currentTracks)
+                when {
+                    tracksHeight > 0 -> activeTrackHeight = tracksHeight
+                    videoSize.height > 0 -> activeTrackHeight = videoSize.height
+                }
             }
         }
         player.addListener(listener)
@@ -1123,6 +1135,7 @@ fun VideoPlayer(
                 selectedSpeed = selectedSpeed,
                 availableTracks = availableTracks,
                 selectedTrack = selectedTrack,
+                activeTrackHeight = activeTrackHeight,
                 episodes = episodes,
                 selectedEpisodeIndex = episodeIndex,
                 onSelectEpisode = onSelectEpisode,
