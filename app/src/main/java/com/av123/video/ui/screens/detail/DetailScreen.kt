@@ -170,6 +170,9 @@ fun DetailScreen(
             playPending = false
         }
     }
+    LaunchedEffect(playbackStarted, video != null) {
+        if (playbackStarted && video != null) detailViewModel.markPlaybackStarted()
+    }
     LaunchedEffect(resolveFailed) {
         if (resolveFailed) playPending = false
     }

@@ -21,7 +21,7 @@ fun WatchRecord.isFinished(): Boolean =
 fun filterHistory(records: List<WatchRecord>, filter: HistoryFilter): List<WatchRecord> =
     when (filter) {
         HistoryFilter.ALL -> records
-        HistoryFilter.UNFINISHED -> records.filter { it.positionMs > 0L && !it.isFinished() }
+        HistoryFilter.UNFINISHED -> records.filter { !it.isFinished() }
         HistoryFilter.FINISHED -> records.filter { it.isFinished() }
     }
 

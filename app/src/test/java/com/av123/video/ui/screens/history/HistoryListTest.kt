@@ -36,7 +36,7 @@ class HistoryListTest {
     }
 
     @Test
-    fun `filters split unfinished and finished by progress`() {
+    fun `filters partition all records into unfinished and finished without ghosts`() {
         val records = listOf(
             record("finished", today, 950L, 1000L),
             record("unfinished", today, 500L, 1000L),
@@ -45,7 +45,7 @@ class HistoryListTest {
         )
         assertEquals(4, filterHistory(records, HistoryFilter.ALL).size)
         assertEquals(
-            listOf("unfinished"),
+            listOf("unfinished", "unstarted", "unknown"),
             filterHistory(records, HistoryFilter.UNFINISHED).map { it.video.id }
         )
         assertEquals(

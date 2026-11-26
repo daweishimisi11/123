@@ -195,7 +195,15 @@ class DetailViewModel(
         flushPending(pendingDay)
     }
 
-    /** 拉取（或重试拉取）详情数据；成功后补全页面并写入观看历史 */
+    /** 用户真正起播时写入观看历史，避免仅点进详情页未播放产生 0% 幽灵记录 */
+    fun markPlaybackStarted() {
+        val video = _video.value ?: return
+        viewModelScope.launch {
+            historyRepository.addRecord(video)
+        }
+    }
+
+    /** 拉取（或重试拉取）详情数据；成功后补全页面 */
     fun loadDetail() {
         viewModelScope.launch { loadDetailOnce() }
     }
@@ -216,7 +224,6 @@ class DetailViewModel(
                 ) {
                     switchEpisode(savedIndex, keepResumePosition = true)
                 }
-                historyRepository.addRecord(result.video)
                 // 结果来自已过期磁盘缓存：页面先渲染缓存，后台静默拉新，成功后就地补全
                 if (result.staleFromDisk) silentRefreshDetail()
             }

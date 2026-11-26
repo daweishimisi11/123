@@ -129,14 +129,18 @@ fun HistoryScreen(
 
     val today = LocalDate.now()
     val filtered = remember(records, filter) { filterHistory(records, filter) }
-    // 多选时展示全部记录，避免筛选后无法选到其他条目
-    val visible = if (selectionMode) records else filtered
+    // 多选与全选严格限定在当前筛选视图内，避免筛选状态下全选误删其他分类记录
+    val visible = filtered
     val sections = remember(visible, today) { groupHistory(visible, today) }
     val allSelected = visible.isNotEmpty() && selectedIds.size == visible.size
 
     fun exitSelection() {
         selectionMode = false
         selectedIds = emptySet()
+    }
+
+    LaunchedEffect(selectionMode, filtered) {
+        if (selectionMode && filtered.isEmpty()) exitSelection()
     }
 
     BackHandler(enabled = selectionMode) { exitSelection() }
