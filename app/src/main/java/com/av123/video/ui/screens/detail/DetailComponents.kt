@@ -73,7 +73,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -520,7 +519,40 @@ internal fun ExpandableTitle(
         fontWeight = FontWeight.SemiBold
     )
 ) {
-    // 详情从缓存条目补全为完整标题时全部重置，避免沿用上一个标题的展开/截断状态
+    ExpandableInlineText(
+        text = text,
+        collapsedMaxLines = 2,
+        style = titleStyle
+    )
+}
+
+/**
+ * 影片简介：默认折叠为 3 行，内容超出时行尾内联主题色“…更多”，
+ * 直接点击简介文字区域即可展开全文（行尾显示“收起”），再次点击收起。
+ */
+@Composable
+internal fun ExpandableSynopsis(text: String) {
+    ExpandableInlineText(
+        text = text,
+        collapsedMaxLines = 3,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/**
+ * 可点击文字区域展开/收起的内联文本组件，供标题（2 行）与简介（3 行）复用：
+ * 折叠态在最后一行右端实测扣掉“…更多”像素宽度并内联追加，点击整段切换展开与收起。
+ */
+@Composable
+private fun ExpandableInlineText(
+    text: String,
+    collapsedMaxLines: Int,
+    style: TextStyle,
+    color: Color = Color.Unspecified
+) {
+    val haptics = rememberAppHaptics()
+    // 详情从缓存补全为完整文本或切换影片时全部重置，避免沿用上一条目的展开状态
     var expanded by remember(text) { mutableStateOf(false) }
     var overflowing by remember(text) { mutableStateOf(false) }
     // 折叠态保留的正文字符数；-1 = 尚未测量，首帧先渲染全文参与溢出检测
@@ -532,10 +564,9 @@ internal fun ExpandableTitle(
     val toggleStyle = SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)
     val textMeasurer = rememberTextMeasurer()
 
-    // “…更多”实测宽度，用于从第二行右端反推切点
     val suffix = "…$expandLabel"
-    val suffixWidthPx = remember(textMeasurer, titleStyle, suffix) {
-        textMeasurer.measure(text = AnnotatedString(suffix), style = titleStyle).size.width
+    val suffixWidthPx = remember(textMeasurer, style, suffix) {
+        textMeasurer.measure(text = AnnotatedString(suffix), style = style).size.width
     }
 
     val displayText = buildAnnotatedString {
@@ -555,19 +586,20 @@ internal fun ExpandableTitle(
 
     Text(
         text = displayText,
-        style = titleStyle,
-        maxLines = if (expanded) Int.MAX_VALUE else 2,
+        style = style,
+        color = color,
+        maxLines = if (expanded) Int.MAX_VALUE else collapsedMaxLines,
         overflow = TextOverflow.Ellipsis,
         onTextLayout = { result ->
-            if (expanded || overflowing) return@Text
+            if (expanded || overflowing || result.lineCount <= 0) return@Text
             if (!result.hasVisualOverflow) return@Text
             overflowing = true
-            // 从第二行右边界减去“…更多”宽度反查字符偏移
+            val targetLine = (collapsedMaxLines - 1).coerceIn(0, result.lineCount - 1)
             val targetX = (result.size.width - suffixWidthPx).toFloat()
-            val centerY = (result.getLineTop(1) + result.getLineBottom(1)) / 2f
+            val centerY = (result.getLineTop(targetLine) + result.getLineBottom(targetLine)) / 2f
             var cut = result.getOffsetForPosition(Offset(targetX, centerY))
             // getOffsetForPosition 对 CJK 可能向上取整到下一字符，逐字符回退到
-            // “切点实际水平位置 + 提示宽度 <= 行宽”为止，既贴满行尾又不溢到第三行
+            // “切点实际水平位置 + 提示宽度 <= 行宽”为止，既贴满行尾又不溢出
             while (cut > 0 &&
                 result.getHorizontalPosition(cut, true) + suffixWidthPx > result.size.width
             ) {
@@ -582,53 +614,11 @@ internal fun ExpandableTitle(
                 enabled = overflowing,
                 role = Role.Button,
                 onClickLabel = if (expanded) collapseLabel else expandLabel
-            ) { expanded = !expanded }
-    )
-}
-
-/**
- * 影片简介：默认折叠为 3 行，内容超出时显示“查看更多”，展开后可“收起”。
- * 是否溢出由文本布局结果判定（与网页 watch__more 的 overflowing 逻辑一致）。
- */
-@Composable
-internal fun ExpandableSynopsis(text: String) {
-    val haptics = rememberAppHaptics()
-    var expanded by remember { mutableStateOf(false) }
-    var overflowing by remember { mutableStateOf(false) }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = if (expanded) Int.MAX_VALUE else 3,
-        overflow = TextOverflow.Ellipsis,
-        onTextLayout = { result ->
-            if (!expanded && result.hasVisualOverflow) overflowing = true
-        }
-    )
-    if (overflowing) {
-        TextButton(
-            onClick = {
+            ) {
                 haptics.tick()
                 expanded = !expanded
-            },
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = stringResource(
-                    if (expanded) R.string.detail_collapse else R.string.detail_expand
-                ),
-                style = MaterialTheme.typography.labelLarge
-            )
-            Spacer(Modifier.size(2.dp))
-            Icon(
-                imageVector = AppIcons.KeyboardArrowDown,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(18.dp)
-                    .rotate(if (expanded) 180f else 0f)
-            )
-        }
-    }
+            }
+    )
 }
 
 /**

@@ -255,7 +255,6 @@
     <string name="detail_episode_n">第%1$d集</string>
     <string name="detail_info">详情</string>
     <string name="detail_synopsis">简介</string>
-    <string name="detail_expand">查看更多</string>
     <string name="detail_collapse">收起</string>
     <string name="title_expand">更多</string>
     <string name="detail_resolving">正在解析播放地址，请稍候…</string>
