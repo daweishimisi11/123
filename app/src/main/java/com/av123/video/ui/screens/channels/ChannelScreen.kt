@@ -463,12 +463,10 @@ fun ChannelScreen(
                                 onRetry = viewModel::retry,
                                 modifier = Modifier.fillMaxSize()
                             )
-                        state.videos.isEmpty() -> EmptyState(
-                            icon = AppIcons.VideoLibraryOutline,
-                            title = stringResource(R.string.channel_empty_title),
-                            subtitle = stringResource(R.string.channel_empty_subtitle),
-                            actionText = stringResource(R.string.common_retry),
-                            onAction = viewModel::retry,
+                        state.videos.isEmpty() -> ChannelEmptyWithPagination(
+                            state = state,
+                            onRetry = viewModel::retry,
+                            onPageSelected = viewModel::loadPage,
                             modifier = Modifier.fillMaxSize()
                         )
                         else -> VideosGrid(
@@ -494,12 +492,10 @@ fun ChannelScreen(
                     onRetry = viewModel::retry,
                     modifier = modifier
                 )
-            !hasContent -> EmptyState(
-                icon = AppIcons.VideoLibraryOutline,
-                title = stringResource(R.string.channel_empty_title),
-                subtitle = stringResource(R.string.channel_empty_subtitle),
-                actionText = stringResource(R.string.common_retry),
-                onAction = viewModel::retry,
+            !hasContent -> ChannelEmptyWithPagination(
+                state = state,
+                onRetry = viewModel::retry,
+                onPageSelected = viewModel::loadPage,
                 modifier = modifier
             )
             // 无筛选表单的视频流页（如部分快捷入口）：直接渲染视频网格
@@ -542,6 +538,37 @@ fun ChannelScreen(
                 onVideoClick(it.id)
             }
         )
+    }
+}
+
+/** 列表空态时仍保留底部分页条（如多页筛选或末页空态），避免用户无法翻回上一页或首页 */
+@Composable
+private fun ChannelEmptyWithPagination(
+    state: CategoryPageState,
+    onRetry: () -> Unit,
+    onPageSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        EmptyState(
+            icon = AppIcons.VideoLibraryOutline,
+            title = stringResource(R.string.channel_empty_title),
+            subtitle = stringResource(R.string.channel_empty_subtitle),
+            actionText = stringResource(R.string.common_retry),
+            onAction = onRetry,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        )
+        state.pagination?.takeIf { it.totalPages > 1 }?.let { pager ->
+            PaginationBar(
+                currentPage = state.page.coerceIn(1, pager.totalPages),
+                totalPages = pager.totalPages,
+                enabled = !state.isLoading,
+                onPageSelected = onPageSelected,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
     }
 }
 

@@ -5,11 +5,14 @@ import com.av123.video.data.db.PageCacheEntity
 import com.av123.video.data.db.PageCacheStatRow
 import com.av123.video.data.model.CategoryPage
 import com.av123.video.data.model.HomeFeed
+import com.av123.video.data.model.Pagination
 import com.av123.video.data.model.Video
 import com.av123.video.data.net.ErrorReporter
+import com.av123.video.data.net.HttpStatusException
 import com.av123.video.data.source.VideoDetail
 import com.av123.video.data.source.VideoSite
 import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -52,7 +55,8 @@ class CategoryRepositoryTest {
 
     private class FakeSite(
         var categoryPage: CategoryPage = CategoryPage(emptyList()),
-        var channelPage: CategoryPage = CategoryPage(emptyList())
+        var channelPage: CategoryPage = CategoryPage(emptyList()),
+        var channelPageProvider: (suspend (path: String, page: Int, params: Map<String, String>) -> CategoryPage)? = null
     ) : VideoSite {
         var failCategory = false
 
@@ -68,7 +72,7 @@ class CategoryRepositoryTest {
             label: String,
             page: Int,
             params: Map<String, String>
-        ): CategoryPage = channelPage
+        ): CategoryPage = channelPageProvider?.invoke(path, page, params) ?: channelPage
 
         override suspend fun fetchVideoDetail(reference: Video): VideoDetail =
             throw NotImplementedError()
@@ -188,5 +192,71 @@ class CategoryRepositoryTest {
         assertEquals(1, channel.page)
         assertTrue("应标记缓存时间用于过期刷新", category.diskCachedAt > 0L)
         assertTrue(channel.diskCachedAt > 0L)
+    }
+
+    @Test
+    fun loadChannelPage_emptyLastPageFallsBackToLastNonEmptyPage() = runBlocking {
+        site.channelPageProvider = { _, page, _ ->
+            when {
+                page <= 4 -> CategoryPage(
+                    videos = listOf(Video(id = "v-$page", title = "第${page}页", category = "演员")),
+                    pagination = Pagination(currentPage = page, totalPages = 5)
+                )
+                else -> CategoryPage(
+                    videos = emptyList(),
+                    pagination = Pagination(currentPage = 5, totalPages = 5)
+                )
+            }
+        }
+
+        repository.loadChannelPage("/cn/actresses/aiko", "Aiko", page = 5).join()
+
+        val state = repository.channelPages.value.getValue("/cn/actresses/aiko")
+        assertEquals(listOf("v-4"), state.videos.map { it.id })
+        assertEquals(4, state.page)
+        assertEquals(4, state.pagination?.currentPage)
+        assertEquals(4, state.pagination?.totalPages)
+    }
+
+    @Test
+    fun loadChannelPage_404OrCappedFarLastPageBinaryFindsLastNonEmptyPage() = runBlocking {
+        site.channelPageProvider = { _, page, _ ->
+            when {
+                page <= 6 -> CategoryPage(
+                    videos = listOf(Video(id = "g-$page", title = "第${page}页", category = "标签")),
+                    pagination = Pagination(currentPage = page, totalPages = 10)
+                )
+                page == 10 -> throw HttpStatusException(404)
+                else -> CategoryPage(videos = emptyList())
+            }
+        }
+
+        repository.loadChannelPage("/cn/genres/11", "标签", page = 10).join()
+
+        val state = repository.channelPages.value.getValue("/cn/genres/11")
+        assertEquals(listOf("g-6"), state.videos.map { it.id })
+        assertEquals(6, state.page)
+        assertEquals(6, state.pagination?.totalPages)
+    }
+
+    @Test
+    fun loadChannelPage_newPageCancelsStaleInFlightRefresh() = runBlocking {
+        val gatePage1 = CompletableDeferred<Unit>()
+        site.channelPageProvider = { _, page, _ ->
+            if (page == 1) gatePage1.await()
+            CategoryPage(
+                videos = listOf(Video(id = "p-$page", title = "第${page}页", category = "标签")),
+                pagination = Pagination(currentPage = page, totalPages = 5)
+            )
+        }
+
+        val staleJob = repository.loadChannelPage("/cn/genres/11", "标签", page = 1)
+        val lastPageJob = repository.loadChannelPage("/cn/genres/11", "标签", page = 5)
+        lastPageJob.join()
+        assertTrue(staleJob.isCancelled)
+
+        val state = repository.channelPages.value.getValue("/cn/genres/11")
+        assertEquals(listOf("p-5"), state.videos.map { it.id })
+        assertEquals(5, state.page)
     }
 }

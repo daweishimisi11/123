@@ -89,6 +89,52 @@ class JsoupParserTest {
     }
 
     @Test
+    fun parseChannelDocument_prefersSmallerExplicitLastAndParsesCommaTotal() {
+        val htmlInflatedMax = """
+            <div class="card">
+              <a class="card__cover" href="/cn/v/a-1"><div class="card__title"><a>A-1</a></div></a>
+            </div>
+            <div class="pager">
+              <div class="pager__pages">
+                <a class="is-on" href="/cn/genres/11?page=1">1</a>
+                <a rel="last" href="/cn/genres/11?page=42">42</a>
+              </div>
+              <input type="number" name="page" max="5000" value="1">
+              <span class="pager__total">/ 1,234</span>
+            </div>
+        """.trimIndent()
+        val parsed = source.parseChannelDocument(parse(htmlInflatedMax), label = "标签", page = 1)
+        assertEquals(42, parsed.pagination?.totalPages)
+
+        val htmlCommaOnly = """
+            <div class="card">
+              <a class="card__cover" href="/cn/v/a-1"><div class="card__title"><a>A-1</a></div></a>
+            </div>
+            <div class="pager">
+              <span class="pager__total">/ 1,234</span>
+            </div>
+        """.trimIndent()
+        val commaParsed = source.parseChannelDocument(parse(htmlCommaOnly), label = "标签", page = 1)
+        assertEquals(1234, commaParsed.pagination?.totalPages)
+
+        val htmlLastPageSpan = """
+            <div class="card">
+              <a class="card__cover" href="/cn/v/a-9"><div class="card__title"><a>A-9</a></div></a>
+            </div>
+            <div class="pager">
+              <div class="pager__pages">
+                <a href="/cn/actresses/aiko?page=10">10</a>
+                <a href="/cn/actresses/aiko?page=11">11</a>
+                <span class="is-on">12</span>
+              </div>
+            </div>
+        """.trimIndent()
+        val lastPageParsed = source.parseChannelDocument(parse(htmlLastPageSpan), label = "演员", page = 12)
+        assertEquals(12, lastPageParsed.pagination?.totalPages)
+        assertEquals(12, lastPageParsed.pagination?.currentPage)
+    }
+
+    @Test
     fun parseSearchDocument_parsesCardsCountAndPagination() {
         val html = """
             <div class="pagehead">

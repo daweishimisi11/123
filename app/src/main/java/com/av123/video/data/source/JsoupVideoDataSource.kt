@@ -318,23 +318,40 @@ class JsoupVideoDataSource(
     private fun parsePagination(doc: Document, requestedPage: Int): Pagination? {
         val pager = doc.selectFirst(config.pagerSelector) ?: return null
 
-        fun pageParam(href: String?): Int? =
-            SiteUrls.queryParameter(href, config.pageParam)?.toIntOrNull()
+        fun positiveInt(raw: String?): Int? =
+            raw?.let { Regex("""[\d,]+""").find(it)?.value?.replace(",", "")?.toIntOrNull() }
+                ?.takeIf { it > 0 }
 
-        val totalFromInput = pager.selectFirst("input[name=${config.pageParam}]")
-            ?.attr("max")?.toIntOrNull()
-        val totalFromText = pager.selectFirst(config.pagerTotal)
-            ?.text()?.let { Regex("""\d+""").find(it)?.value?.toIntOrNull() }
+        fun pageParam(href: String?): Int? =
+            SiteUrls.queryParameter(href, config.pageParam)?.toIntOrNull()?.takeIf { it > 0 }
+
+        val totalFromInput = positiveInt(
+            pager.selectFirst("input[name=${config.pageParam}]")?.attr("max")
+        )
+        val totalFromText = positiveInt(pager.selectFirst(config.pagerTotal)?.text())
         val totalFromLast = pageParam(pager.selectFirst("a[rel=last]")?.absUrl("href"))
-        val totalFromLinks = pager.select("${config.pagerPages} a")
-            .mapNotNull { pageParam(it.absUrl("href")) ?: it.text().trim().toIntOrNull() }
+        val totalFromLinks = pager.select(
+            "${config.pagerPages} a, ${config.pagerPages} ${config.pagerCurrent}, ${config.pagerPages} span"
+        )
+            .mapNotNull { el ->
+                val fromHref = if (el.tagName().equals("a", ignoreCase = true)) {
+                    pageParam(el.absUrl("href"))
+                } else {
+                    null
+                }
+                fromHref ?: el.text().trim().replace(",", "").toIntOrNull()?.takeIf { it > 0 }
+            }
             .maxOrNull()
-        val total = sequenceOf(totalFromInput, totalFromText, totalFromLast, totalFromLinks)
-            .filterNotNull().firstOrNull()?.coerceAtLeast(1) ?: return null
+        // 部分频道模板会给 input[max] 写静态上限（如 5000），若文本总数或 rel="last" 明确给出更小页数，以实际更小上界为准
+        val explicitTotal = listOfNotNull(totalFromText, totalFromLast).minOrNull()
+        val total = when {
+            explicitTotal != null && totalFromInput != null -> minOf(totalFromInput, explicitTotal)
+            else -> totalFromInput ?: explicitTotal ?: totalFromLinks
+        }?.coerceAtLeast(1) ?: return null
 
         val current = pager.selectFirst("${config.pagerPages} ${config.pagerCurrent}")
-            ?.text()?.trim()?.toIntOrNull()
-            ?: pager.selectFirst("input[name=${config.pageParam}]")?.attr("value")?.toIntOrNull()
+            ?.text()?.trim()?.replace(",", "")?.toIntOrNull()
+            ?: positiveInt(pager.selectFirst("input[name=${config.pageParam}]")?.attr("value"))
             ?: requestedPage
 
         return Pagination(

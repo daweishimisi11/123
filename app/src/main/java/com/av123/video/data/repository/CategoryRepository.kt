@@ -9,9 +9,11 @@ import com.av123.video.data.model.IndexEntry
 import com.av123.video.data.model.Pagination
 import com.av123.video.data.model.Video
 import com.av123.video.data.net.AppError
+import com.av123.video.data.net.HttpStatusException
 import com.av123.video.data.runCatchingCancellable
 import com.av123.video.data.net.ErrorReporter
 import com.av123.video.data.source.VideoSite
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,9 +74,10 @@ class CategoryRepository(
     private val _channelPages = MutableStateFlow<Map<String, CategoryPageState>>(emptyMap())
     val channelPages: StateFlow<Map<String, CategoryPageState>> = _channelPages.asStateFlow()
 
-    /** 在途加载任务去重：同一分类/栏目并发触发时复用同一 Job，避免重复抓取 */
-    private val inFlightCategories = ConcurrentHashMap<String, Job>()
-    private val inFlightChannels = ConcurrentHashMap<String, Job>()
+    /** 在途加载任务去重：同一页请求复用；目标页码或筛选变化时取消旧任务，防止直接点末页被后台刷新吞掉 */
+    private val inFlightCategories = ConcurrentHashMap<String, Pair<Int, Job>>()
+    private val inFlightChannels =
+        ConcurrentHashMap<String, Triple<Int, Map<String, String>, Job>>()
 
     /** 从冷启动缓存条目恢复各分类/栏目第一页到内存状态 */
     fun hydrate(entries: List<PageCacheEntity>) {
@@ -129,11 +132,16 @@ class CategoryRepository(
      * 瞬时跳变判断结束——空页可能毫秒级返回，StateFlow 合并会丢掉中间状态）。
      */
     fun loadCategoryPage(category: String, page: Int): Job {
-        inFlightCategories[category]?.takeIf { it.isActive }?.let { return it }
-        return launchCategoryPage(category, page).also { job ->
-            inFlightCategories[category] = job
-            job.invokeOnCompletion { inFlightCategories.remove(category, job) }
+        val current = inFlightCategories[category]
+        if (current != null && current.second.isActive) {
+            if (current.first == page) return current.second
+            current.second.cancel()
         }
+        lateinit var job: Job
+        job = launchCategoryPage(category, page)
+        inFlightCategories[category] = page to job
+        job.invokeOnCompletion { inFlightCategories.remove(category, page to job) }
+        return job
     }
 
     private fun launchCategoryPage(category: String, page: Int): Job = scope.launch {
@@ -216,11 +224,94 @@ class CategoryRepository(
         page: Int,
         queryParams: Map<String, String> = emptyMap()
     ): Job {
-        inFlightChannels[path]?.takeIf { it.isActive }?.let { return it }
-        return launchChannelPage(path, label, page, queryParams).also { job ->
-            inFlightChannels[path] = job
-            job.invokeOnCompletion { inFlightChannels.remove(path, job) }
+        val current = inFlightChannels[path]
+        if (current != null && current.third.isActive) {
+            if (current.first == page && current.second == queryParams) return current.third
+            current.third.cancel()
         }
+        lateinit var job: Job
+        job = launchChannelPage(path, label, page, queryParams)
+        val entry = Triple(page, queryParams, job)
+        inFlightChannels[path] = entry
+        job.invokeOnCompletion { inFlightChannels.remove(path, entry) }
+        return job
+    }
+
+    /**
+     * 抓取栏目指定页；若直接跳转较大页码（常见于演员/标签页直接点最后一页）返回空列表或 404，
+     * 说明站点申报的总页数高于实际非空末页，则先看服务端响应是否给出了更小 totalPages，
+     * 再依次尝试前一页与有界二分回退，自动落到真实存在视频的最后一页并修正总页数。
+     */
+    private suspend fun fetchChannelPageWithEmptyTailFallback(
+        path: String,
+        label: String,
+        requestedPage: Int,
+        queryParams: Map<String, String>
+    ): Pair<Int, com.av123.video.data.model.CategoryPage> {
+        val firstResult = try {
+            dataSource.fetchByPath(path, label, requestedPage, queryParams)
+        } catch (e: HttpStatusException) {
+            if (requestedPage > 1 && e.code == 404) null else throw e
+        }
+        if (firstResult != null && (requestedPage <= 1 || firstResult.isIndex || firstResult.videos.isNotEmpty())) {
+            return requestedPage to firstResult
+        }
+
+        suspend fun fetchSafe(p: Int): com.av123.video.data.model.CategoryPage? = try {
+            dataSource.fetchByPath(path, label, p, queryParams)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: HttpStatusException) {
+            if (e.code == 404) null else throw e
+        }
+
+        fun normalizeAsLastPage(
+            resolvedPage: Int,
+            pageData: com.av123.video.data.model.CategoryPage
+        ): Pair<Int, com.av123.video.data.model.CategoryPage> =
+            resolvedPage to pageData.copy(
+                pagination = Pagination(currentPage = resolvedPage, totalPages = resolvedPage)
+            )
+
+        // 1) 空响应本身若解析到更小的总页数，优先直接尝试该页
+        val hintTotal = firstResult?.pagination?.totalPages
+        if (hintTotal != null && hintTotal in 1 until requestedPage) {
+            val hinted = fetchSafe(hintTotal)
+            if (hinted != null && hinted.videos.isNotEmpty()) {
+                return normalizeAsLastPage(hintTotal, hinted)
+            }
+        }
+
+        // 2) 最常见偏差是总页数多算 1 页：先探测前一页
+        val prevPage = requestedPage - 1
+        val prevResult = fetchSafe(prevPage)
+        if (prevResult != null && prevResult.videos.isNotEmpty()) {
+            return normalizeAsLastPage(prevPage, prevResult)
+        }
+
+        // 3) 若站点大幅虚高或对深分页设限（prevPage 也为空），在 [1, prevPage - 1] 做有界二分查找最大非空页
+        var low = 1
+        var high = prevPage - 1
+        var bestPage: Int? = null
+        var bestResult: com.av123.video.data.model.CategoryPage? = null
+        var probes = 0
+        while (low <= high && probes < MAX_LAST_PAGE_PROBES) {
+            probes++
+            val mid = low + (high - low + 1) / 2
+            val candidate = fetchSafe(mid)
+            if (candidate != null && candidate.videos.isNotEmpty()) {
+                bestPage = mid
+                bestResult = candidate
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        if (bestPage != null && bestResult != null) {
+            return normalizeAsLastPage(bestPage, bestResult)
+        }
+
+        return requestedPage to (firstResult ?: prevResult ?: com.av123.video.data.model.CategoryPage(emptyList()))
     }
 
     private fun launchChannelPage(
@@ -233,8 +324,10 @@ class CategoryRepository(
             states + (path to (states[path] ?: CategoryPageState())
                 .copy(isLoading = true, error = null, page = page))
         }
-        runCatchingCancellable { dataSource.fetchByPath(path, label, page, queryParams) }
-            .onSuccess { result ->
+        runCatchingCancellable {
+            fetchChannelPageWithEmptyTailFallback(path, label, page, queryParams)
+        }
+            .onSuccess { (resolvedPage, result) ->
                 _channelPages.update { states ->
                     val prev = states[path]
                     states + (path to CategoryPageState(
@@ -252,12 +345,12 @@ class CategoryRepository(
                         searchField = result.searchField ?: prev?.searchField,
                         // 翻页（如该演员第 2 页）通常不再渲染 .ahero，沿用首页资料避免头部闪没
                         actressProfile = result.actressProfile ?: prev?.actressProfile,
-                        page = page,
+                        page = resolvedPage,
                         isLoading = false
                     ))
                 }
                 // 仅缓存无筛选参数的第一页；筛选/翻页结果不覆盖冷启动缓存
-                if (page == 1 && queryParams.isEmpty()) {
+                if (resolvedPage == 1 && queryParams.isEmpty()) {
                     pageCacheStore.putList(
                         PageCacheStore.channelKey(path),
                         label = label,
@@ -291,6 +384,8 @@ class CategoryRepository(
     companion object {
         /** 列表页第一页磁盘缓存有效期：超过后再次进入该栏目时后台刷新 */
         const val LIST_STALE_MS = 60L * 60_000L
+        /** 末页为空时有界二分回退的最大探测次数 */
+        private const val MAX_LAST_PAGE_PROBES = 8
     }
 }
 
