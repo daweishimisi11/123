@@ -23,7 +23,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.ui.util.findActivity
@@ -185,8 +184,8 @@ internal fun buildTrackSelectionParameters(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun applyTrackSelection(player: ExoPlayer, track: VideoTrack?) {
-    val trackSelector = player.trackSelector as? DefaultTrackSelector ?: return
-    trackSelector.parameters = buildTrackSelectionParameters(trackSelector.parameters, track)
+    player.trackSelectionParameters =
+        buildTrackSelectionParameters(player.trackSelectionParameters, track)
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
