@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "123AV"
+rootProject.name = "123"
 include(":app")
 include(":benchmark")

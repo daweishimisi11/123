@@ -126,7 +126,7 @@ fun AboutSheet(onDismiss: () -> Unit) {
                     .size(96.dp)
             )
             Spacer(Modifier.height(10.dp))
-            // 图标下面的应用名（品牌字标就是 123AV），再下面才是版本号
+            // 图标下面的应用名（品牌字标就是 123.），再下面才是版本号
             BrandLogo(
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.align(Alignment.CenterHorizontally)

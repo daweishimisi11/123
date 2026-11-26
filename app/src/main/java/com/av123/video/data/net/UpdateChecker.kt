@@ -17,7 +17,7 @@ object UpdateChecker {
     private const val REPO = "daweishimisi11/123"
     private const val API = "https://api.github.com/repos/$REPO/releases/latest"
     private const val ATOM = "https://github.com/$REPO/releases.atom"
-    private const val USER_AGENT = "123AV (Android)"
+    private const val USER_AGENT = "123 (Android)"
 
     /** 同一份结果在 30 秒内复用，避免连点把限流打满 */
     private const val CACHE_WINDOW_MS = 30_000L

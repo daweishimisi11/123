@@ -324,7 +324,7 @@ fun ProfileScreen(
                             )
                         },
                         onClick = {
-                            exportLauncher.launch("123AV-backup-${LocalDate.now()}.json")
+                            exportLauncher.launch("123-backup-${LocalDate.now()}.json")
                         }
                     )
                     SettingsDivider()
