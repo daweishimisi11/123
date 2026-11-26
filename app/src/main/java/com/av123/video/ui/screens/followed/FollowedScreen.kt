@@ -3,8 +3,10 @@ package com.av123.video.ui.screens.followed
 import com.av123.video.ui.icons.AppIcons
 import com.av123.video.ui.util.rememberAppHaptics
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,20 +26,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,11 +58,15 @@ import com.av123.video.LocalAppContainer
 import com.av123.video.R
 import com.av123.video.data.repository.FollowedActress
 import com.av123.video.ui.components.ActressAvatar
+import com.av123.video.ui.components.AppSnackbarHost
 import com.av123.video.ui.components.EmptyState
+import com.av123.video.ui.components.SnackbarTone
 import com.av123.video.ui.components.VideoCompactCard
 import com.av123.video.ui.components.shimmerPlaceholder
+import com.av123.video.ui.components.showAppSnackbar
 import com.av123.video.ui.theme.AppShapes
 import com.av123.video.ui.theme.appCardContainerColor
+import kotlinx.coroutines.launch
 
 /**
  * “我的关注”页：本地关注女演员聚合。
@@ -72,8 +88,35 @@ fun FollowedScreen(
     val actresses by viewModel.actresses.collectAsStateWithLifecycle()
     val feeds by viewModel.feeds.collectAsStateWithLifecycle()
     val haptics = rememberAppHaptics()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    var pendingUnfollow by remember { mutableStateOf<FollowedActress?>(null) }
+
+    fun performUnfollow(actress: FollowedActress) {
+        haptics.confirm()
+        viewModel.unfollow(actress.path)
+        scope.launch {
+            val result = snackbarHostState.showAppSnackbar(
+                message = resources.getString(R.string.followed_unfollowed, actress.name),
+                tone = SnackbarTone.Removal,
+                actionLabel = resources.getString(R.string.followed_undo),
+                withDismissAction = true,
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.follow(actress)
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = {
+            AppSnackbarHost(
+                snackbarHostState,
+                modifier = Modifier.navigationBarsPadding()
+            )
+        },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.followed_title)) },
@@ -146,7 +189,11 @@ fun FollowedScreen(
                         FollowedActressChip(
                             actress = actress,
                             dimmed = feeds[actress.path].isLoadedEmpty(),
-                            onClick = { onOpenChannel(actress.name, actress.path) }
+                            onClick = { onOpenChannel(actress.name, actress.path) },
+                            onLongClick = {
+                                haptics.confirm()
+                                pendingUnfollow = actress
+                            }
                         )
                     }
                 }
@@ -173,6 +220,7 @@ fun FollowedScreen(
                     actress = actress,
                     feed = feeds[actress.path],
                     onOpenChannel = { onOpenChannel(actress.name, actress.path) },
+                    onUnfollow = { performUnfollow(actress) },
                     onRetry = {
                         haptics.tick()
                         viewModel.retry(actress.path)
@@ -182,24 +230,45 @@ fun FollowedScreen(
             }
         }
     }
+
+    pendingUnfollow?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingUnfollow = null },
+            title = { Text(stringResource(R.string.followed_unfollow)) },
+            text = { Text(stringResource(R.string.followed_unfollow_confirm, target.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingUnfollow = null
+                    performUnfollow(target)
+                }) { Text(stringResource(R.string.followed_unfollow)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUnfollow = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
 }
 
 /** 已加载完成、没有报错且没有影片 */
 private fun ActressFeedState?.isLoadedEmpty(): Boolean =
     this != null && !loading && !error && videos.isEmpty()
 
-/** 顶部关注演员头像 + 姓名的圆形入口 */
+/** 顶部关注演员头像 + 姓名的圆形入口（支持长按取消关注） */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FollowedActressChip(
     actress: FollowedActress,
     dimmed: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(64.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         ActressAvatar(
             url = actress.avatarUrl,
@@ -224,11 +293,12 @@ private fun ActressFeedSection(
     actress: FollowedActress,
     feed: ActressFeedState?,
     onOpenChannel: () -> Unit,
+    onUnfollow: () -> Unit,
     onRetry: () -> Unit,
     onVideoClick: (String) -> Unit
 ) {
     Column {
-        // 分区标题：头像 + 姓名 + “查看全部”，整行进入她的个人页
+        // 分区标题：头像 + 姓名 + “取消关注” + “查看全部”
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -249,6 +319,16 @@ private fun ActressFeedSection(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            TextButton(
+                onClick = onUnfollow,
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.followed_unfollow),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
                 text = stringResource(R.string.followed_view_all),
                 style = MaterialTheme.typography.labelMedium,

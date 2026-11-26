@@ -72,6 +72,22 @@ class FollowedViewModel(
         actresses.value.firstOrNull { it.path == path }?.let { loadActress(it, force = true) }
     }
 
+    /** 直接在关注页取消关注 */
+    fun unfollow(path: String) {
+        loaded.remove(path)
+        _feeds.value = _feeds.value - path
+        viewModelScope.launch {
+            followedActressRepository.unfollow(path)
+        }
+    }
+
+    /** 撤销取消关注，恢复记录 */
+    fun follow(actress: FollowedActress) {
+        viewModelScope.launch {
+            followedActressRepository.follow(actress)
+        }
+    }
+
     private fun loadActress(actress: FollowedActress, force: Boolean = false) {
         _feeds.value = _feeds.value +
             (actress.path to (_feeds.value[actress.path] ?: ActressFeedState())
