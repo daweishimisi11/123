@@ -565,7 +565,7 @@ internal fun PlayerArea(
     episodes: List<Episode> = emptyList(),
     onSelectEpisode: (Int) -> Unit = {}
 ) {
-    val detailCode = video.detailCodeFromInfoRows()
+    val playerTitle = video.detailHeaderTitle()
 
     // 方向与系统栏同步挂在这一层：换集会清空 playbackUrl、VideoPlayer 会短暂离开组合，
     // 若同步写在 VideoPlayer 里，onDispose 会把全屏还原成竖屏，解析完再切回来
@@ -577,7 +577,7 @@ internal fun PlayerArea(
         VideoPlayer(
             url = playbackUrl,
             headers = playbackHeaders,
-            title = detailCode,
+            title = playerTitle,
             isFullscreen = isFullscreen,
             onFullscreenChange = onFullscreenChange,
             onPlaybackReady = onPlaybackReady,

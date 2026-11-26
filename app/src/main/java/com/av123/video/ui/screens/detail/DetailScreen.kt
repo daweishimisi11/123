@@ -254,8 +254,9 @@ fun DetailScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = video?.detailCodeFromInfoRows().orEmpty(),
-                            maxLines = 1
+                            text = video?.detailHeaderTitle().orEmpty(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     },
                     navigationIcon = {
@@ -503,6 +504,12 @@ internal fun Video.detailCodeFromInfoRows(): String = infoRows
     ?.value
     ?.trim()
     .orEmpty()
+
+/** 详情页顶栏与全屏播放器标题：优先取信息行代码，缺失时依次回退 code 与影片标题 */
+internal fun Video.detailHeaderTitle(): String =
+    detailCodeFromInfoRows()
+        .ifBlank { code.trim() }
+        .ifBlank { title.trim() }
 
 @Composable
 internal fun FullscreenBackFallback(
