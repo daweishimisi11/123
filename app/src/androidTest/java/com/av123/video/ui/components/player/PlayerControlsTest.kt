@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.av123.video.data.model.Episode
-import com.av123.video.data.prefs.ResizeModeOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -21,12 +20,10 @@ class PlayerControlsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun settingsSheet_excludesPlaybackSpeedAndEpisodeControls() {
+    fun settingsSheet_excludesPlaybackSpeedEpisodeAndResizeControls() {
         var bufferToggledTo: Boolean? = null
         composeRule.setContent {
             SettingsSheet(
-                resizeMode = ResizeModeOption.FIT,
-                onResizeModeChange = {},
                 autoPlayNext = true,
                 onAutoPlayNextChange = {},
                 flipToExitEnabled = false,
@@ -39,7 +36,7 @@ class PlayerControlsTest {
         }
 
         composeRule.onNodeWithText("播放设置").assertIsDisplayed()
-        composeRule.onNodeWithText("画面比例").assertIsDisplayed()
+        composeRule.onNodeWithText("画面比例").assertDoesNotExist()
         composeRule.onNodeWithText("倍速").assertDoesNotExist()
         composeRule.onNodeWithText("1.5x").assertDoesNotExist()
         composeRule.onNodeWithText("选集").assertDoesNotExist()
@@ -53,8 +50,6 @@ class PlayerControlsTest {
         var cellularPicked: com.av123.video.data.prefs.VideoBufferSize? = null
         composeRule.setContent {
             SettingsSheet(
-                resizeMode = ResizeModeOption.FIT,
-                onResizeModeChange = {},
                 autoPlayNext = true,
                 onAutoPlayNextChange = {},
                 flipToExitEnabled = false,
@@ -90,11 +85,12 @@ class PlayerControlsTest {
     }
 
     @Test
-    fun episodeSheet_onlyListsEpisodesAndSelectsTarget() {
+    fun episodePopupMenu_onlyListsEpisodesAndSelectsTarget() {
         var picked = -1
         var dismissed = false
         composeRule.setContent {
-            EpisodeSheet(
+            EpisodePopupMenu(
+                expanded = true,
                 episodes = listOf(
                     Episode(name = "正片1", url = "https://example.com/1"),
                     Episode(name = "正片2", url = "https://example.com/2")

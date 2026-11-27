@@ -34,6 +34,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +47,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,6 +55,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -64,14 +67,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -105,14 +108,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
@@ -135,11 +143,12 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.av123.video.MainActivity
 import com.av123.video.R
+import com.av123.video.data.model.Episode
 import com.av123.video.ui.theme.Motion
-import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
+import com.av123.video.ui.util.rememberAppHaptics
 import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.max
@@ -266,6 +275,46 @@ internal fun PlayerProgressSlider(
     )
 }
 
+/** 底部控制栏统一胶囊按钮：激活态（弹出对应选项卡时）高亮描边与底色 */
+@Composable
+internal fun PlayerControlPillButton(
+    text: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    maxWidth: Dp = Dp.Unspecified
+) {
+    val shape = CircleShape
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = modifier
+            .then(if (maxWidth != Dp.Unspecified) Modifier.widthIn(max = maxWidth) else Modifier)
+            .height(30.dp)
+            .clip(shape)
+            .background(
+                if (active) primary.copy(alpha = 0.30f)
+                else Color.White.copy(alpha = 0.14f)
+            )
+            .border(
+                width = if (active) 1.2.dp else 0.8.dp,
+                color = if (active) primary else Color.White.copy(alpha = 0.18f),
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = if (active) Color.White else Color.White.copy(alpha = 0.94f),
+            fontSize = AppTypeScale.Label,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 internal fun SpeedPopupMenu(
     expanded: Boolean,
@@ -274,22 +323,68 @@ internal fun SpeedPopupMenu(
     onDismiss: () -> Unit
 ) {
     val speeds = listOf(0.5f, 1f, 1.25f, 1.5f, 2f, 3f)
-    val selectedColor = MaterialTheme.colorScheme.primary
+    AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
+        PlayerFloatingOptionCard(
+            title = stringResource(R.string.player_speed_title),
+            badge = "${selected}x",
+            width = 172.dp
+        ) {
+            speeds.chunked(2).forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    pair.forEach { speed ->
+                        PlayerOptionTile(
+                            label = "${speed}x",
+                            selected = speed == selected,
+                            centered = true,
+                            onClick = { onSelected(speed) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
-    CapsulePopupMenu(expanded = expanded, onDismiss = onDismiss) {
-        speeds.forEach { speed ->
-            val isSelected = speed == selected
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "${speed}x",
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) selectedColor else Color.White.copy(alpha = 0.78f),
-                        fontSize = AppTypeScale.Body
-                    )
-                },
-                onClick = { onSelected(speed) }
-            )
+@Composable
+internal fun EpisodePopupMenu(
+    expanded: Boolean,
+    episodes: List<Episode>,
+    selectedEpisodeIndex: Int,
+    onSelectEpisode: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val columns = if (episodes.size >= 3) 3 else 2
+    val cardWidth = if (columns == 3) 244.dp else 176.dp
+    AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
+        PlayerFloatingOptionCard(
+            title = stringResource(R.string.player_episodes),
+            badge = stringResource(R.string.player_episodes_count, episodes.size),
+            width = cardWidth
+        ) {
+            episodes.indices.chunked(columns).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    row.forEach { index ->
+                        val label = episodes[index].name.ifBlank {
+                            stringResource(R.string.detail_episode_n, index + 1)
+                        }
+                        PlayerOptionTile(
+                            label = label,
+                            selected = index == selectedEpisodeIndex,
+                            centered = true,
+                            onClick = { onSelectEpisode(index) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
         }
     }
 }
@@ -307,227 +402,189 @@ internal fun TrackPopupMenu(
         autoLabel = stringResource(R.string.player_track_auto),
         activeHeight = activeHeight
     )
-    CapsulePopupMenu(expanded = expanded, onDismiss = onDismiss) {
-        DropdownMenuItem(
-            text = {
-                Text(
-                    text = autoLabel,
-                    fontWeight = if (selected == null) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (selected == null) Color.White else Color.White.copy(alpha = 0.78f),
-                    fontSize = AppTypeScale.Body
-                )
-            },
-            onClick = { onSelected(null) }
-        )
-        tracks.forEach { track ->
-            val isSelected = track == selected
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = track.label,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.78f),
-                        fontSize = AppTypeScale.Body
-                    )
-                },
-                onClick = { onSelected(track) }
+    AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
+        PlayerFloatingOptionCard(
+            title = stringResource(R.string.player_track_title),
+            width = 196.dp
+        ) {
+            PlayerOptionTile(
+                label = autoLabel,
+                selected = selected == null,
+                showCheck = true,
+                onClick = { onSelected(null) },
+                modifier = Modifier.fillMaxWidth()
             )
-        }
-    }
-}
-
-/**
- * 播放器右上角设置齿轮：点击在齿轮正左侧弹出深色胶囊菜单，
- * 避免向下展开超出播放器区域。菜单内含“播放详情/播放地址”等入口，
- * “播放地址”二级弹窗同样锚定在齿轮左侧。
- */
-@Composable
-internal fun PlayerSettingsButton(
-    settingsExpanded: Boolean,
-    urlSheetExpanded: Boolean,
-    playbackUrl: String,
-    resizeMode: ResizeModeOption,
-    onResizeModeChange: (ResizeModeOption) -> Unit,
-    onSettingsExpandedChange: (Boolean) -> Unit,
-    onUrlSheetExpandedChange: (Boolean) -> Unit,
-    onShowStats: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(modifier = modifier) {
-        IconButton(onClick = { onSettingsExpandedChange(!settingsExpanded) }) {
-            Icon(
-                imageVector = AppIcons.Settings,
-                contentDescription = stringResource(R.string.player_settings),
-                tint = Color.White,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        // 锚点为 48dp 图标按钮，左移 56dp 使弹窗右缘对齐齿轮左缘并留 8dp 间距
-        val offsetXPx = with(LocalDensity.current) { (-56).dp.roundToPx() }
-
-        if (settingsExpanded) {
-            Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(offsetXPx, 0),
-                onDismissRequest = { onSettingsExpandedChange(false) },
-                properties = PopupProperties(focusable = true)
-            ) {
-                SettingsMenuContent(
-                    resizeMode = resizeMode,
-                    onResizeModeChange = onResizeModeChange,
-                    onShowStats = {
-                        onSettingsExpandedChange(false)
-                        onShowStats()
-                    },
-                    onShowUrl = {
-                        onSettingsExpandedChange(false)
-                        onUrlSheetExpandedChange(true)
-                    }
-                )
-            }
-        }
-
-        if (urlSheetExpanded) {
-            Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(offsetXPx, 0),
-                onDismissRequest = { onUrlSheetExpandedChange(false) },
-                properties = PopupProperties(focusable = true)
-            ) {
-                PlaybackUrlContent(
-                    url = playbackUrl,
-                    onDismiss = { onUrlSheetExpandedChange(false) }
+            tracks.forEach { track ->
+                PlayerOptionTile(
+                    label = track.label,
+                    selected = track == selected,
+                    showCheck = true,
+                    onClick = { onSelected(track) },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
     }
 }
 
-@Composable
-internal fun SettingsMenuContent(
-    resizeMode: ResizeModeOption,
-    onResizeModeChange: (ResizeModeOption) -> Unit,
-    onShowStats: () -> Unit,
-    onShowUrl: () -> Unit
-) {
-    // 二级菜单：画面比例选项在同一胶囊容器内切换展示，避免弹层套弹层定位
-    var showResizeMenu by remember { mutableStateOf(false) }
-
-    val resizeLabel = when (resizeMode) {
-        ResizeModeOption.FIT -> stringResource(R.string.player_resize_fit)
-        ResizeModeOption.FILL -> stringResource(R.string.player_resize_fill)
-        ResizeModeOption.ZOOM -> stringResource(R.string.player_resize_zoom)
+/** 固定弹出在锚点按钮正上方、水平居中且不越界的浮层定位器，避免遮挡底部控制栏与按钮本身 */
+private class AboveAnchorPopupPositionProvider(
+    private val gapPx: Int,
+    private val marginPx: Int
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val maxX = (windowSize.width - popupContentSize.width - marginPx).coerceAtLeast(marginPx)
+        val centeredX = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
+        val x = centeredX.coerceIn(marginPx, maxX)
+        val y = (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(marginPx)
+        return IntOffset(x, y)
     }
+}
 
-    Box(
-        modifier = Modifier
-            .clip(AppShapes.Large)
-            .background(Color.Black.copy(alpha = 0.86f))
+@Composable
+private fun AboveAnchorPopup(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    if (!expanded) return
+    val density = LocalDensity.current
+    val positionProvider = remember(density) {
+        with(density) {
+            AboveAnchorPopupPositionProvider(
+                gapPx = 10.dp.roundToPx(),
+                marginPx = 12.dp.roundToPx()
+            )
+        }
+    }
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
     ) {
-        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
-            if (!showResizeMenu) {
-                // 一级：画面比例（右侧显示当前值）/ 播放详情 / 播放链接
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showResizeMenu = true }
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
+        val visibleState = remember {
+            MutableTransitionState(false).apply { targetState = true }
+        }
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(Motion.Overlay) + scaleIn(Motion.Overlay, initialScale = 0.94f)
+        ) {
+            content()
+        }
+    }
+}
+
+/** 播放器底部三类选项卡（倍速 / 选集 / 清晰度）共用的深色毛玻璃浮卡容器 */
+@Composable
+private fun PlayerFloatingOptionCard(
+    title: String,
+    width: Dp,
+    badge: String? = null,
+    maxHeight: Dp = 232.dp,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        shape = AppShapes.Large,
+        color = Color(0xF015161B),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        shadowElevation = 12.dp,
+        modifier = Modifier
+            .width(width)
+            .heightIn(max = maxHeight)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = AppTypeScale.Label,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (badge != null) {
                     Text(
-                        text = stringResource(R.string.player_resize_title),
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = AppTypeScale.Body,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = resizeLabel,
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = AppTypeScale.Label
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Icon(
-                        imageVector = AppIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                SettingsMenuRow(stringResource(R.string.player_menu_stats), onShowStats)
-                SettingsMenuRow(stringResource(R.string.player_menu_url), onShowUrl)
-            } else {
-                // 二级：标题 + 返回，下方三个画面比例选项，当前项打勾
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showResizeMenu = false }
-                        .padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = AppIcons.ArrowBack,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.player_resize_title),
-                        color = Color.White,
-                        fontSize = AppTypeScale.Body,
+                        text = badge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = AppTypeScale.Caption,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                ResizeModeOption.entries.forEach { option ->
-                    val label = when (option) {
-                        ResizeModeOption.FIT -> R.string.player_resize_fit
-                        ResizeModeOption.FILL -> R.string.player_resize_fill
-                        ResizeModeOption.ZOOM -> R.string.player_resize_zoom
-                    }
-                    val selected = option == resizeMode
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onResizeModeChange(option) }
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Text(
-                            text = stringResource(label),
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (selected) Color.White else Color.White.copy(alpha = 0.78f),
-                            fontSize = AppTypeScale.Body,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (selected) {
-                            Icon(
-                                imageVector = AppIcons.Check,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
             }
+            HorizontalDivider(
+                thickness = 0.8.dp,
+                color = Color.White.copy(alpha = 0.09f)
+            )
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                content = content
+            )
         }
     }
 }
 
 @Composable
-internal fun SettingsMenuRow(label: String, onClick: () -> Unit) {
+private fun PlayerOptionTile(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    centered: Boolean = false,
+    showCheck: Boolean = false
+) {
+    val haptics = rememberAppHaptics()
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(10.dp)
     Row(
+        modifier = modifier
+            .height(36.dp)
+            .clip(shape)
+            .background(
+                if (selected) primary.copy(alpha = 0.26f)
+                else Color.White.copy(alpha = 0.08f)
+            )
+            .then(
+                if (selected) Modifier.border(1.2.dp, primary, shape)
+                else Modifier
+            )
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
     ) {
         Text(
             text = label,
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = AppTypeScale.Body
+            color = if (selected) Color.White else Color.White.copy(alpha = 0.84f),
+            fontSize = AppTypeScale.Label,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (centered) Modifier else Modifier.weight(1f)
         )
+        if (showCheck && selected) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = AppIcons.Check,
+                contentDescription = null,
+                tint = primary,
+                modifier = Modifier.size(15.dp)
+            )
+        }
     }
 }
 
@@ -635,22 +692,5 @@ internal fun PopupCloseButton(onClick: () -> Unit) {
             tint = Color.White.copy(alpha = 0.8f),
             modifier = Modifier.size(18.dp)
         )
-    }
-}
-
-
-@Composable
-internal fun CapsulePopupMenu(
-    expanded: Boolean,
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        shape = AppShapes.Large,
-        containerColor = Color.Black.copy(alpha = 0.86f)
-    ) {
-        content()
     }
 }

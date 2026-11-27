@@ -103,7 +103,6 @@ import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.model.VideoVersionLink
-import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.components.AppSnackbarHost
 import com.av123.video.ui.components.ErrorState
@@ -410,10 +409,6 @@ fun DetailScreen(
                     onCellularBufferSizeChange = { size ->
                         scope.launch { container.settingsStore.setCellularBufferSize(size) }
                     },
-                    resizeMode = appSettings.videoResizeMode,
-                    onResizeModeChange = { mode ->
-                        scope.launch { container.settingsStore.setVideoResizeMode(mode) }
-                    },
                     seekGestureSensitivity = appSettings.seekGestureSensitivity,
                     onEpisodeEnded = {
                         // 自动连播（可在"我的-播放设置"关闭）：存在下一集时切换，
@@ -620,8 +615,6 @@ private fun DetailContent(
     cellularBufferSize: com.av123.video.data.prefs.VideoBufferSize =
         com.av123.video.data.prefs.VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (com.av123.video.data.prefs.VideoBufferSize) -> Unit = {},
-    resizeMode: ResizeModeOption = ResizeModeOption.FIT,
-    onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
     onEpisodeEnded: () -> Unit = {}
 ) {
@@ -661,8 +654,6 @@ private fun DetailContent(
             onWifiBufferSizeChange = onWifiBufferSizeChange,
             cellularBufferSize = cellularBufferSize,
             onCellularBufferSizeChange = onCellularBufferSizeChange,
-            resizeMode = resizeMode,
-            onResizeModeChange = onResizeModeChange,
             seekGestureSensitivity = seekGestureSensitivity,
             onEpisodeEnded = onEpisodeEnded,
             episodes = video.episodes,

@@ -515,10 +515,9 @@
         <item>六</item>
         <item>日</item>
     </string-array>
-    <string name="player_resize_title">画面比例</string>
-    <string name="player_resize_fit">适应</string>
-    <string name="player_resize_fill">填充</string>
-    <string name="player_resize_zoom">裁切填满</string>
+    <string name="player_speed_title">倍速</string>
+    <string name="player_track_title">清晰度</string>
+    <string name="player_episodes_count">共 %1$d 集</string>
     <string name="player_url_copy">复制链接</string>
     <string name="player_url_copied">已复制</string>
     <string name="player_error_title">播放失败</string>

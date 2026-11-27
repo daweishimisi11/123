@@ -25,8 +25,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.ui.util.findActivity
 
@@ -124,14 +122,6 @@ internal fun formatSeekDeltaSeconds(startPositionMs: Long, targetPositionMs: Lon
     val deltaSec = ((targetPositionMs - startPositionMs) / 1_000.0).roundToInt()
     if (deltaSec == 0) return null
     return if (deltaSec > 0) "+${deltaSec}s" else "${deltaSec}s"
-}
-
-/** 应用内画面比例枚举 → media3 AspectRatioFrameLayout 常量 */
-@androidx.annotation.OptIn(UnstableApi::class)
-internal fun ResizeModeOption.toMedia3ResizeMode(): Int = when (this) {
-    ResizeModeOption.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-    ResizeModeOption.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-    ResizeModeOption.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 }
 
 

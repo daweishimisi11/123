@@ -105,7 +105,6 @@ import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.model.VideoVersionLink
-import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.components.ErrorState
@@ -658,8 +657,6 @@ internal fun PlayerArea(
     onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
-    resizeMode: ResizeModeOption = ResizeModeOption.FIT,
-    onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
     onEpisodeEnded: () -> Unit = {},
     episodes: List<Episode> = emptyList(),
@@ -700,8 +697,6 @@ internal fun PlayerArea(
             onWifiBufferSizeChange = onWifiBufferSizeChange,
             cellularBufferSize = cellularBufferSize,
             onCellularBufferSizeChange = onCellularBufferSizeChange,
-            resizeMode = resizeMode,
-            onResizeModeChange = onResizeModeChange,
             seekGestureSensitivity = seekGestureSensitivity,
             onEpisodeEnded = onEpisodeEnded,
             modifier = modifier.background(Color.Black)

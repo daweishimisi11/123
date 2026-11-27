@@ -6,6 +6,7 @@ import com.av123.video.ui.util.rememberAppHaptics
 import com.av123.video.ui.theme.AppShapes
 
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
@@ -24,16 +25,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -117,57 +122,115 @@ internal fun resolveAppLockToggleAction(
 internal fun shouldRelockAfterBackground(awayMs: Long, relockAfterMs: Long): Boolean =
     relockAfterMs <= 0L || awayMs >= relockAfterMs
 
+/** 进程内应用锁状态；供播放器等子组件感知锁定态并暂停恢复，避免锁屏下误续播 */
+internal val LocalAppLockState = staticCompositionLocalOf<AppLockState?> { null }
+
+/**
+ * 进程内应用锁状态容器：
+ * - [unlocked] 控制锁屏遮罩显隐；
+ * - [hasUnlockedOnce] 记录本次进程是否已解锁进入过内容区：超时重新锁定时保持底层内容树挂载，
+ *   解锁后可直接回到锁定前的页面与滚动/播放位置，不会重建 NavHost 退回首页。
+ */
+@Stable
+class AppLockState internal constructor(
+    initialUnlocked: Boolean,
+    relockAfterMs: Long
+) {
+    var unlocked by mutableStateOf(initialUnlocked)
+        internal set
+
+    var hasUnlockedOnce by mutableStateOf(initialUnlocked)
+        internal set
+
+    internal var backgroundedAt: Long = 0L
+    internal var relockAfterMs: Long = relockAfterMs
+
+    fun markBackgrounded(nowMs: Long = SystemClock.elapsedRealtime()) {
+        if (unlocked) {
+            backgroundedAt = nowMs
+        }
+    }
+
+    /** 回到前台时评估是否应重新上锁；返回 true 表示当前处于锁定态需要弹出验证 */
+    fun evaluateOnResume(nowMs: Long = SystemClock.elapsedRealtime()): Boolean {
+        if (!unlocked) return true
+        if (backgroundedAt > 0L) {
+            val awayMs = nowMs - backgroundedAt
+            backgroundedAt = 0L
+            if (shouldRelockAfterBackground(awayMs, relockAfterMs)) {
+                unlocked = false
+                return true
+            }
+        }
+        return false
+    }
+
+    /** 供子组件在 ON_RESUME 同帧内同步判断是否已锁定或即将触发超时重锁 */
+    fun isLockedOrPendingRelock(nowMs: Long = SystemClock.elapsedRealtime()): Boolean {
+        if (!unlocked) return true
+        val bg = backgroundedAt
+        return bg > 0L && shouldRelockAfterBackground(nowMs - bg, relockAfterMs)
+    }
+
+    fun unlock() {
+        unlocked = true
+        hasUnlockedOnce = true
+        backgroundedAt = 0L
+    }
+}
+
 /**
  * 应用锁门禁：
  * - 响应运行时 [enabled] 开关变化：运行期刚在设置页开启时不二次弹窗，离开超时后即生效；
  * - 离开超过 [relockAfterMs] 后回前台重新验证（0 表示立即）；
- * - 未解锁时不组合 [content]，避免内容在锁屏下被截图或无障碍读取；
+ * - 冷启动未首次解锁前不组合 [content]，超时重新锁定时保留已组合的导航树并在上方覆盖全屏锁屏遮罩，
+ *   拦截触摸与返回键，指纹解锁后直接回到锁定前所在页面；
  * - 取消/报错切到后台，回前台自动重弹。
  */
 @Composable
 fun AppLockGate(
     enabled: Boolean,
     relockAfterMs: Long,
+    lockState: AppLockState = remember {
+        AppLockState(initialUnlocked = !enabled, relockAfterMs = relockAfterMs)
+    },
     content: @Composable () -> Unit
 ) {
     // 曾处于关闭状态说明是运行期刚通过设置页认证开启，本次进程保持已解锁直到下次切后台超时
     var unlockedByRuntimeEnable by remember { mutableStateOf(false) }
+    lockState.relockAfterMs = relockAfterMs
+
     if (!enabled) {
         unlockedByRuntimeEnable = true
-        content()
+        lockState.unlock()
+        CompositionLocalProvider(LocalAppLockState provides null) {
+            content()
+        }
         return
+    }
+    if (unlockedByRuntimeEnable && !lockState.hasUnlockedOnce) {
+        lockState.unlock()
     }
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() as? FragmentActivity }
-    // 解锁态只在本进程内存中；冷启动默认锁住，运行期开启维持已解锁直到离开超时
-    var unlocked by remember { mutableStateOf(unlockedByRuntimeEnable) }
     // 认证触发计数：进入即 1（首次 ON_RESUME 可能已过），之后每次需要验证时 +1
     var promptTick by remember { mutableIntStateOf(1) }
-    // 进入后台的时间点（elapsedRealtime），0 表示当前不在“离开待判定”状态
-    var backgroundedAt by remember { mutableLongStateOf(0L) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, relockAfterMs) {
+    DisposableEffect(lifecycleOwner, lockState) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     // 画中画仍属于前台可见播放，不算离开应用
-                    if (unlocked && activity?.isInPictureInPictureMode != true) {
-                        backgroundedAt = SystemClock.elapsedRealtime()
+                    if (activity?.isInPictureInPictureMode != true) {
+                        lockState.markBackgrounded()
                     }
                 }
 
                 Lifecycle.Event.ON_RESUME -> {
-                    if (!unlocked) {
+                    if (lockState.evaluateOnResume()) {
                         promptTick++
-                    } else if (backgroundedAt > 0L) {
-                        val awayMs = SystemClock.elapsedRealtime() - backgroundedAt
-                        if (shouldRelockAfterBackground(awayMs, relockAfterMs)) {
-                            unlocked = false
-                            promptTick++
-                        }
-                        backgroundedAt = 0L
                     }
                 }
 
@@ -181,14 +244,14 @@ fun AppLockGate(
     val title = stringResource(R.string.app_lock_prompt_title)
     val subtitle = stringResource(R.string.app_lock_unlock)
     // 计数变化（进入、超时回前台）自动弹系统验证；已解锁时不弹
-    androidx.compose.runtime.LaunchedEffect(promptTick, activity, unlocked) {
-        if (unlocked) return@LaunchedEffect
+    androidx.compose.runtime.LaunchedEffect(promptTick, activity, lockState.unlocked) {
+        if (lockState.unlocked) return@LaunchedEffect
         val act = activity ?: return@LaunchedEffect
         authenticateAppLock(
             activity = act,
             title = title,
             subtitle = subtitle,
-            onSuccess = { unlocked = true },
+            onSuccess = { lockState.unlock() },
             onError = { _, _ ->
                 // 取消/报错：切到后台，避免停留在未验证界面；回前台自动重弹
                 act.moveTaskToBack(true)
@@ -196,29 +259,50 @@ fun AppLockGate(
         )
     }
 
-    if (unlocked) {
-        content()
-    } else {
-        AppLockOverlay(
-            onUnlockClick = {
-                val act = activity ?: return@AppLockOverlay
-                authenticateAppLock(
-                    activity = act,
-                    title = title,
-                    subtitle = subtitle,
-                    onSuccess = { unlocked = true },
-                    onError = { _, _ -> act.moveTaskToBack(true) }
+    CompositionLocalProvider(LocalAppLockState provides lockState) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (lockState.hasUnlockedOnce) {
+                content()
+            }
+            if (!lockState.unlocked) {
+                // 超时重锁后拦截系统返回键，避免误把底层导航栈弹出
+                BackHandler(enabled = lockState.hasUnlockedOnce) {
+                    activity?.moveTaskToBack(true)
+                }
+                AppLockOverlay(
+                    onUnlockClick = {
+                        val act = activity ?: return@AppLockOverlay
+                        authenticateAppLock(
+                            activity = act,
+                            title = title,
+                            subtitle = subtitle,
+                            onSuccess = { lockState.unlock() },
+                            onError = { _, _ -> act.moveTaskToBack(true) }
+                        )
+                    },
+                    modifier = Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                // Main 阶段发生在子按钮之后，只消费未被按钮处理的触控事件，防止穿透到底层页面
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
                 )
             }
-        )
+        }
     }
 }
 
 /** 品牌锁屏：渐变图标 + 标题 + 手动解锁按钮（系统弹窗未出现/被滑掉时兜底触发） */
 @Composable
-private fun AppLockOverlay(onUnlockClick: () -> Unit) {
+private fun AppLockOverlay(
+    onUnlockClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
         Column(

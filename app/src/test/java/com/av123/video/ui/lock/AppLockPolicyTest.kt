@@ -34,4 +34,34 @@ class AppLockPolicyTest {
             resolveAppLockToggleAction(targetEnabled = true, canAuthenticate = false)
         )
     }
+
+    @Test
+    fun `AppLockState relocks only after timeout and remembers prior unlock across background`() {
+        val state = AppLockState(initialUnlocked = false, relockAfterMs = 30_000L)
+        assertFalse(state.unlocked)
+        assertFalse(state.hasUnlockedOnce)
+        assertTrue(state.isLockedOrPendingRelock(nowMs = 1_000L))
+
+        state.unlock()
+        assertTrue(state.unlocked)
+        assertTrue(state.hasUnlockedOnce)
+
+        // 短暂切后台（未超时）不触发重新锁定
+        state.markBackgrounded(nowMs = 10_000L)
+        assertFalse(state.isLockedOrPendingRelock(nowMs = 25_000L))
+        assertFalse(state.evaluateOnResume(nowMs = 25_000L))
+        assertTrue(state.unlocked)
+
+        // 离开达到或超过 30 秒后回前台触发锁定，但 hasUnlockedOnce 保留以保住页面导航栈
+        state.markBackgrounded(nowMs = 30_000L)
+        assertTrue(state.isLockedOrPendingRelock(nowMs = 60_000L))
+        assertTrue(state.evaluateOnResume(nowMs = 60_000L))
+        assertFalse(state.unlocked)
+        assertTrue(state.hasUnlockedOnce)
+
+        // 指纹解锁后恢复已解锁状态
+        state.unlock()
+        assertTrue(state.unlocked)
+        assertTrue(state.hasUnlockedOnce)
+    }
 }

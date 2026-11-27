@@ -70,6 +70,14 @@ internal data class ChangelogEntry(
 
 internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
     ChangelogEntry(
+        version = "v0.2.7",
+        highlights = listOf(
+            "修复应用锁超时重新锁定后指纹解锁回到首页的问题，解锁后直接恢复到锁定前所在页面与播放状态",
+            "统一全屏底栏「倍速」「选集」「清晰度」为按钮正上方浮动毛玻璃选项卡，高亮按钮激活态并防遮挡",
+            "移除播放器右上角设置中冗余的「画面比例」切换项，固定采用「适应」模式"
+        )
+    ),
+    ChangelogEntry(
         version = "v0.2.6",
         highlights = listOf(
             "新增视频播放缓冲大小调节功能（「我的 → 播放」及全屏设置内可配置）",

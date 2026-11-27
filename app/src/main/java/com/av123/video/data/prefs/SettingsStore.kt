@@ -14,14 +14,6 @@ private val Context.settingsDataStore by preferencesDataStore(name = "app_settin
 /** 深色模式偏好 */
 enum class DarkMode { SYSTEM, LIGHT, DARK }
 
-/**
- * 播放器画面比例模式（映射 media3 AspectRatioFrameLayout.RESIZE_MODE_*）：
- * - [FIT] 适应：等比缩放完整显示，可能留黑边（默认）
- * - [FILL] 填充：拉伸填满视图，画面可能变形
- * - [ZOOM] 裁切填满：等比放大到铺满并裁掉超出部分，不变形
- */
-enum class ResizeModeOption { FIT, FILL, ZOOM }
-
 /** 视频条目布局：双列网格 / 单列一行一条 */
 enum class VideoLayout { GRID, LIST }
 
@@ -98,8 +90,6 @@ data class AppSettings(
     val autoPlayNext: Boolean = true,
     /** 全屏播放时将手机屏幕朝下，是否停止播放并结束应用 */
     val flipToExitEnabled: Boolean = false,
-    /** 播放器画面比例（适应/填充/裁切填满），全局默认、跨影片持久化 */
-    val videoResizeMode: ResizeModeOption = ResizeModeOption.FIT,
     /** 视频列表布局：双列网格 / 单列；一处切换，四个网格页同步 */
     val videoLayout: VideoLayout = VideoLayout.GRID,
     /** 冷启动是否需要生物识别/设备凭据解锁 */
@@ -167,9 +157,6 @@ class SettingsStore(context: Context) {
             pipEnabled = prefs[KEY_PIP_ENABLED] ?: true,
             autoPlayNext = prefs[KEY_AUTO_PLAY_NEXT] ?: true,
             flipToExitEnabled = prefs[KEY_FLIP_TO_EXIT] ?: false,
-            videoResizeMode = runCatching {
-                ResizeModeOption.valueOf(prefs[KEY_VIDEO_RESIZE_MODE] ?: ResizeModeOption.FIT.name)
-            }.getOrDefault(ResizeModeOption.FIT),
             videoLayout = runCatching {
                 VideoLayout.valueOf(prefs[KEY_VIDEO_LAYOUT] ?: VideoLayout.GRID.name)
             }.getOrDefault(VideoLayout.GRID),
@@ -231,10 +218,6 @@ class SettingsStore(context: Context) {
         store.edit { it[KEY_FLIP_TO_EXIT] = enabled }
     }
 
-    suspend fun setVideoResizeMode(mode: ResizeModeOption) {
-        store.edit { it[KEY_VIDEO_RESIZE_MODE] = mode.name }
-    }
-
     suspend fun setVideoLayout(layout: VideoLayout) {
         store.edit { it[KEY_VIDEO_LAYOUT] = layout.name }
     }
@@ -278,7 +261,6 @@ class SettingsStore(context: Context) {
         val KEY_PIP_ENABLED = booleanPreferencesKey("pip_enabled")
         val KEY_AUTO_PLAY_NEXT = booleanPreferencesKey("auto_play_next")
         val KEY_FLIP_TO_EXIT = booleanPreferencesKey("flip_to_exit_enabled")
-        val KEY_VIDEO_RESIZE_MODE = stringPreferencesKey("video_resize_mode")
         val KEY_VIDEO_LAYOUT = stringPreferencesKey("video_layout")
         val KEY_APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         val KEY_APP_LOCK_TIMEOUT = stringPreferencesKey("app_lock_timeout")

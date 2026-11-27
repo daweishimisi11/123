@@ -149,9 +149,9 @@ import androidx.media3.ui.PlayerView
 import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
-import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.prefs.VideoBufferSize
+import com.av123.video.ui.lock.LocalAppLockState
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
@@ -259,8 +259,6 @@ fun VideoPlayer(
     onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
-    resizeMode: ResizeModeOption = ResizeModeOption.FIT,
-    onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
 ) {
     val context = LocalContext.current
@@ -311,9 +309,11 @@ fun VideoPlayer(
     // Activity 引用（方向/系统栏/画中画均需要），提前到生命周期监听之前
     val activity = remember(context) { context.findActivity() }
 
-    // 生命周期联动：切后台暂停，返回前台恢复（仅当之前正在播放）
+    // 生命周期联动：切后台暂停，返回前台恢复（仅当之前正在播放且未被应用锁锁定）
+    val appLockState = LocalAppLockState.current
+    val isAppLocked = appLockState?.unlocked == false
     var wasPlayingOnPause by remember { mutableStateOf(false) }
-    DisposableEffect(lifecycleOwner, player) {
+    DisposableEffect(lifecycleOwner, player, appLockState) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
@@ -326,7 +326,11 @@ fun VideoPlayer(
                 }
 
                 Lifecycle.Event.ON_RESUME -> {
-                    if (wasPlayingOnPause) player.playWhenReady = true
+                    // 超时触发应用锁时禁止在锁屏背后抢先续播，待指纹解锁后再恢复
+                    if (wasPlayingOnPause && appLockState?.isLockedOrPendingRelock() != true) {
+                        player.playWhenReady = true
+                        wasPlayingOnPause = false
+                    }
                 }
 
                 else -> Unit
@@ -334,6 +338,17 @@ fun VideoPlayer(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(isAppLocked, player) {
+        if (isAppLocked) {
+            if (player.playWhenReady) {
+                wasPlayingOnPause = true
+                player.playWhenReady = false
+            }
+        } else if (wasPlayingOnPause) {
+            player.playWhenReady = true
+            wasPlayingOnPause = false
+        }
     }
 
     // 播放器状态聚合
@@ -434,7 +449,7 @@ fun VideoPlayer(
         playbackState = playbackState,
         isFullscreen = isFullscreen,
         isInPip = isInPip,
-        hasError = error != null
+        hasError = error != null || isAppLocked
     )
     DisposableEffect(activity, keepScreenOn) {
         val window = activity?.window
@@ -713,8 +728,7 @@ fun VideoPlayer(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
-                    // 参数名 resizeMode 与 PlayerView 属性同名，显式 this 消歧
-                    this.resizeMode = resizeMode.toMedia3ResizeMode()
+                    this.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     this.keepScreenOn = keepScreenOn
                     this.player = player
                 }.also { playerViewHolder[0] = it }
@@ -724,7 +738,6 @@ fun VideoPlayer(
             // 否则 PlayerView 仍指向已 release 的旧实例，画面黑、无声，
             // 而新实例照样回调 READY——换回播过的集会一直卡住（2026-10-23）
             update = { playerView ->
-                playerView.resizeMode = resizeMode.toMedia3ResizeMode()
                 playerView.keepScreenOn = keepScreenOn
                 if (playerView.player !== player) playerView.player = player
             },
@@ -1186,8 +1199,6 @@ fun VideoPlayer(
                 onWifiBufferSizeChange = onWifiBufferSizeChange,
                 cellularBufferSize = cellularBufferSize,
                 onCellularBufferSizeChange = onCellularBufferSizeChange,
-                resizeMode = resizeMode,
-                onResizeModeChange = onResizeModeChange,
                 modifier = Modifier.fillMaxSize()
             )
         }
