@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -90,6 +92,113 @@ jobs:
         # 资产名同样带 v 前缀：123-v0.1.1.apk
         run: cp app/build/outputs/apk/release/app-release.apk "123-${{ steps.ver.outputs.tag }}.apk"
 
+      - name: Generate release notes
+        env:
+          RELEASE_TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import html
+          import os
+          import pathlib
+          import re
+          import subprocess
+
+          tag = os.environ["RELEASE_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+
+          def git(*args: str) -> str:
+              res = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+              return res.stdout.strip()
+
+          all_tags = [t for t in git("tag", "--merged", "HEAD", "--sort=-v:refname").splitlines() if t and t != tag]
+          is_prerelease = "-" in tag
+          if is_prerelease:
+              prev_tag = all_tags[0] if all_tags else ""
+          else:
+              formal_tags = [t for t in all_tags if "-" not in t]
+              prev_tag = formal_tags[0] if formal_tags else (all_tags[0] if all_tags else "")
+
+          rev_range = f"{prev_tag}..HEAD" if prev_tag else "HEAD"
+          raw_commits = git("log", "--no-merges", "--format=%h%x09%s", rev_range)
+
+          groups = [
+              ("feat", "✨ 新增功能", []),
+              ("fix", "🐛 问题修复", []),
+              ("improve", "🔧 优化与调整", []),
+              ("chore", "📦 构建与维护", []),
+              ("other", "📌 其他变更", []),
+          ]
+          group_map = {k: items for k, _, items in groups}
+          type_to_group = {
+              "feat": "feat",
+              "fix": "fix",
+              "perf": "improve",
+              "refactor": "improve",
+              "style": "improve",
+              "ci": "chore",
+              "chore": "chore",
+              "docs": "chore",
+              "test": "chore",
+              "build": "chore",
+          }
+
+          cc_re = re.compile(r"^([a-zA-Z]+)(?:\(([^)]+)\))?!?:\s*(.+)$")
+          for line in raw_commits.splitlines():
+              if "\t" not in line:
+                  continue
+              sha, subject = line.split("\t", 1)
+              subject = subject.strip()
+              if not subject:
+                  continue
+              m = cc_re.match(subject)
+              if m:
+                  ctype, scope, desc = m.group(1).lower(), m.group(2), m.group(3).strip()
+                  gkey = type_to_group.get(ctype, "other")
+                  prefix = f"[{scope}] " if scope else ""
+                  group_map[gkey].append((sha, f"{prefix}{desc}"))
+              else:
+                  group_map["other"].append((sha, subject))
+
+          md_sections = []
+          tg_sections = []
+          for _, title, items in groups:
+              if not items:
+                  continue
+              md_lines = [f"### {title}"]
+              tg_lines = [f"<b>{html.escape(title)}</b>"]
+              for sha, text in items:
+                  md_lines.append(f"- {text} (`{sha}`)")
+                  tg_lines.append(f"• {html.escape(text)}")
+              md_sections.append("\n".join(md_lines))
+              tg_sections.append("\n".join(tg_lines))
+
+          if md_sections:
+              md_body = "## 更新日志\n\n" + "\n\n".join(md_sections)
+              tg_body = "\n\n".join(tg_sections)
+          else:
+              md_body = "## 更新日志\n\n- 无新增代码提交"
+              tg_body = "• 无新增代码提交"
+
+          if prev_tag:
+              md_body += f"\n\n**Full Changelog**: {server}/{repo}/compare/{prev_tag}...{tag}"
+              tg_body += f"\n\n<i>对比基线：{html.escape(prev_tag)} → {html.escape(tag)}</i>"
+
+          # Telegram 消息总长度限制 4096，正文预留头部和按钮余量，按行安全截断
+          if len(tg_body) > 3200:
+              kept = []
+              total = 0
+              for line in tg_body.splitlines():
+                  if total + len(line) + 1 > 3100:
+                      break
+                  kept.append(line)
+                  total += len(line) + 1
+              tg_body = "\n".join(kept).rstrip() + "\n\n<i>...(其余更新请点击下方「查看详情」)</i>"
+
+          pathlib.Path("/tmp/release_notes.md").write_text(md_body + "\n", encoding="utf-8")
+          pathlib.Path("/tmp/release_notes_tg.html").write_text(tg_body, encoding="utf-8")
+          PY
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -97,7 +206,7 @@ jobs:
           # 发布标题与 tag 一致（v0.1.1），不再拼 "123 0.1.1"
           name: ${{ steps.ver.outputs.tag }}
           prerelease: ${{ contains(steps.ver.outputs.tag, '-') }}
-          generate_release_notes: true
+          body_path: /tmp/release_notes.md
           files: 123-*.apk
 
       - name: Notify Telegram on Release
@@ -113,6 +222,7 @@ jobs:
           import html
           import json
           import os
+          import pathlib
           import urllib.request
 
           repo = os.environ["GITHUB_REPOSITORY"]
@@ -124,7 +234,6 @@ jobs:
 
           release_url = f"{server}/{repo}/releases/tag/{tag}"
           apk_url = f"{server}/{repo}/releases/download/{tag}/123-{tag}.apk"
-          notes = ""
           is_prerelease = "-" in tag
 
           try:
@@ -140,7 +249,6 @@ jobs:
                   data = json.loads(resp.read().decode("utf-8"))
               release_url = data.get("html_url") or release_url
               is_prerelease = bool(data.get("prerelease", is_prerelease))
-              notes = (data.get("body") or "").strip()
               for asset in data.get("assets", []):
                   if asset.get("name", "").endswith(".apk") and asset.get("browser_download_url"):
                       apk_url = asset["browser_download_url"]
@@ -148,16 +256,17 @@ jobs:
           except Exception as exc:
               print(f"Warning: failed to query GitHub release metadata: {exc}")
 
-          if not notes:
-              notes = "暂无更新日志"
-          if len(notes) > 3200:
-              notes = notes[:3200].rstrip() + "\n\n...(完整更新日志请点击下方「查看详情」)"
+          tg_notes_path = pathlib.Path("/tmp/release_notes_tg.html")
+          if tg_notes_path.exists():
+              notes_html = tg_notes_path.read_text(encoding="utf-8").strip()
+          else:
+              notes_html = "暂无更新日志"
 
           badge = " 🧪 <i>(测试版)</i>" if is_prerelease else ""
           text = (
               f"🚀 <b>123 {html.escape(tag)} 已发布</b>{badge}\n\n"
               f"<b>📝 更新日志</b>\n"
-              f"{html.escape(notes)}"
+              f"{notes_html}"
           )
 
           payload = {
