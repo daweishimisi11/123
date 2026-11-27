@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -25,6 +25,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,12 @@ internal data class ChangelogEntry(
 )
 
 internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
+    ChangelogEntry(
+        version = "v0.2.5",
+        highlights = listOf(
+            "重设计「我的 → 版本」抽屉比例：改为紧凑横向头部与全展开布局，打开即可同时看到检查更新与全部入口"
+        )
+    ),
     ChangelogEntry(
         version = "v0.2.4",
         highlights = listOf(
@@ -158,108 +165,28 @@ fun AboutSheet(onDismiss: () -> Unit) {
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Spacer(Modifier.height(12.dp))
-            // 直接用启动器图标：自适应图标是 XML，Compose 的 painterResource
-            // 解不了（只支持 VectorDrawable/位图），会直接崩，交给 ImageView 渲染
-            AndroidView(
-                factory = { ctx ->
-                    android.widget.ImageView(ctx).apply {
-                        setImageResource(R.mipmap.ic_launcher)
-                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .size(96.dp)
-            )
-            Spacer(Modifier.height(10.dp))
-            // 图标下面的应用名（品牌字标就是 123.），再下面才是版本号
-            BrandLogo(
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(Modifier.height(8.dp))
-            AboutBadge(
-                text = "v$versionName",
-                accent = true,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(Modifier.height(20.dp))
-
-            Button(
-                onClick = { checkUpdate() },
-                enabled = !checking,
-                shape = AppShapes.Pill,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .height(48.dp)
-                    .widthIn(min = 208.dp)
-            ) {
-                Icon(
-                    imageVector = AppIcons.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(AppIconSize.Inline)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(
-                        if (checking) R.string.about_checking else R.string.about_check_update
-                    ),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        AboutSheetContent(
+            versionName = versionName,
+            checking = checking,
+            onCheckUpdate = { checkUpdate() },
+            onOpenChangelog = {
+                haptics.tick()
+                showChangelog = true
+            },
+            onOpenProject = {
+                haptics.tick()
+                uriHandler.openUri(REPO_URL)
+            },
+            onOpenFeedback = {
+                haptics.tick()
+                uriHandler.openUri(ISSUES_URL)
             }
-
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = stringResource(R.string.about_more),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .clip(AppShapes.Large)
-                    .background(appCardContainerColor())
-            ) {
-                AboutLinkRow(
-                    icon = AppIcons.HistoryOutline,
-                    title = stringResource(R.string.about_changelog),
-                    subtitle = stringResource(R.string.about_changelog_subtitle)
-                ) {
-                    haptics.tick()
-                    showChangelog = true
-                }
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 66.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                )
-                AboutLinkRow(
-                    icon = AppIcons.Public,
-                    title = stringResource(R.string.about_project),
-                    subtitle = stringResource(R.string.about_project_url)
-                ) {
-                    haptics.tick()
-                    uriHandler.openUri(REPO_URL)
-                }
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 66.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                )
-                AboutLinkRow(
-                    icon = AppIcons.DescriptionOutline,
-                    title = stringResource(R.string.about_feedback)
-                ) {
-                    haptics.tick()
-                    uriHandler.openUri(ISSUES_URL)
-                }
-            }
-        }
+        )
     }
 
     dialog?.let { current ->
@@ -393,18 +320,134 @@ internal fun ChangelogDialog(
 }
 
 @Composable
-private fun AboutBadge(text: String, accent: Boolean, modifier: Modifier = Modifier) {
+internal fun AboutSheetContent(
+    versionName: String,
+    checking: Boolean,
+    onCheckUpdate: () -> Unit,
+    onOpenChangelog: () -> Unit,
+    onOpenProject: () -> Unit,
+    onOpenFeedback: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        // 横向紧凑头部：左侧 56dp 图标 + 中间品牌名与版本号 + 右侧检查更新按钮，
+        // 把原本近 300dp 的纵向堆叠压缩为一行，抽屉弹出时所有功能入口一屏完整呈现
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 直接用启动器图标：自适应图标是 XML，Compose 的 painterResource 解不了，交给 ImageView 渲染
+            AndroidView(
+                factory = { ctx ->
+                    android.widget.ImageView(ctx).apply {
+                        setImageResource(R.mipmap.ic_launcher)
+                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    }
+                },
+                modifier = Modifier.size(56.dp)
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                BrandLogo(style = MaterialTheme.typography.titleLarge)
+                AboutBadge(
+                    text = "v$versionName",
+                    accent = true,
+                    compact = true
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Button(
+                onClick = onCheckUpdate,
+                enabled = !checking,
+                shape = AppShapes.Pill,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                modifier = Modifier.height(38.dp)
+            ) {
+                Icon(
+                    imageVector = AppIcons.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(
+                        if (checking) R.string.about_checking else R.string.about_check_update
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.about_more),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .clip(AppShapes.Large)
+                .background(appCardContainerColor())
+        ) {
+            AboutLinkRow(
+                icon = AppIcons.HistoryOutline,
+                title = stringResource(R.string.about_changelog),
+                subtitle = stringResource(R.string.about_changelog_subtitle),
+                onClick = onOpenChangelog
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 62.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+            AboutLinkRow(
+                icon = AppIcons.Public,
+                title = stringResource(R.string.about_project),
+                subtitle = stringResource(R.string.about_project_url),
+                onClick = onOpenProject
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 62.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+            AboutLinkRow(
+                icon = AppIcons.DescriptionOutline,
+                title = stringResource(R.string.about_feedback),
+                onClick = onOpenFeedback
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutBadge(
+    text: String,
+    accent: Boolean,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier = modifier
             .clip(AppShapes.Pill)
             .background(if (accent) scheme.primary else scheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 5.dp)
+            .padding(
+                horizontal = if (compact) 10.dp else 14.dp,
+                vertical = if (compact) 2.dp else 5.dp
+            )
     ) {
         Text(
             text = text,
-            // 比原来的 12sp 大一档，抽屉里这枚版本号是主要信息
-            fontSize = 14.sp,
+            fontSize = if (compact) 12.sp else 14.sp,
             color = if (accent) scheme.onPrimary else scheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold
         )
@@ -423,12 +466,12 @@ private fun AboutLinkRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(36.dp)
                 .clip(AppShapes.Medium)
                 .background(scheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
