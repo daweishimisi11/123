@@ -92,13 +92,20 @@ private fun trimOneDecimal(value: Double): String =
 
 /**
  * 详情信息行里的可点击胶囊（类型/演员/制作商/系列/类别/标签 等 a 链接）：
- * [text] 为胶囊显示文案，[path] 为站点相对路径（如 /cn/genres/11），点击后进入对应视频流。
+ * [text] 为胶囊显示文案，[path] 为站点相对路径（如 /cn/genres/11），点击后进入对应视频流，
+ * [japaneseName] 为演员对应的日文原名（非演员胶囊为空串）。
  */
 @Serializable
 data class InfoChip(
     val text: String,
-    val path: String
-)
+    val path: String,
+    val japaneseName: String = ""
+) {
+    /** 若含有效日文名则格式化为 `英文名 (日文名)`，否则原样返回 [text] */
+    fun displayText(): String =
+        if (japaneseName.isBlank()) text
+        else com.av123.video.data.source.formatActressBilingualName(text, japaneseName)
+}
 
 /** 详情页一行信息：[label] 为字段名（dt），[value] 为纯文本值，[chips] 为可点击胶囊（含跳转路径） */
 @Serializable
@@ -276,6 +283,7 @@ data class IndexEntry(
  * - [meta] 属性原文（.ahero__meta，如“38岁 · 163cm · 88-59-85 · E罩杯”）
  * - [videos]/[views]/[followers]/[debut] .astat 四项统计原文（视频/观看/关注者/出道）
  * - [followersLabel] 关注按钮上的紧凑关注数（与关注者统计同源，如 16.3K）
+ * - [japaneseName] 从 `/ja/` 页面补充的日文原名（已从半角假名规范化为全角），无则为空
  * 关注/取关是 Alpine save() 交互（需站点账号），App 不解析行为。
  */
 @Serializable
@@ -287,8 +295,14 @@ data class ActressProfile(
     val views: String = "",
     val followers: String = "",
     val debut: String = "",
-    val followersLabel: String = ""
-)
+    val followersLabel: String = "",
+    val japaneseName: String = ""
+) {
+    /** 若含有效日文名则格式化为 `英文名 (日文名)`，否则原样返回 [name] */
+    fun displayName(): String =
+        if (japaneseName.isBlank()) name
+        else com.av123.video.data.source.formatActressBilingualName(name, japaneseName)
+}
 
 /** 收藏记录：只持久化网格卡片展示与详情跳转所需字段，按收藏时间倒序 */
 data class FavoriteRecord(

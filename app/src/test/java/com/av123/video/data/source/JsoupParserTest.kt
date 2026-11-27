@@ -527,4 +527,96 @@ class JsoupParserTest {
 
         assertEquals(listOf("a", "b", "c", "d"), result.map { it.id })
     }
+
+    // ---------- 演员日文名规范化与双语解析 ----------
+
+    @Test
+    fun normalizeJapaneseKana_convertsHalfWidthKanaAndDakutenToFullWidth() {
+        assertEquals("白峰ミウ", normalizeJapaneseKana("白峰ﾐｳ"))
+        assertEquals("シラミネ ミウ", normalizeJapaneseKana("ｼﾗﾐﾈ ﾐｳ"))
+        assertEquals("ガギグゲゴ パピプペポ ヴァー・", normalizeJapaneseKana("ｶﾞｷﾞｸﾞｹﾞｺﾞ ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ ｳﾞｧｰ･"))
+        assertEquals("Miu Shiramine (白峰ミウ)", formatActressBilingualName("Miu Shiramine", "白峰ﾐｳ"))
+        // 日文站回退只写英文时不重复拼接
+        assertEquals("Miu Shiramine", formatActressBilingualName("Miu Shiramine", "Miu Shiramine"))
+    }
+
+    @Test
+    fun localeHelpers_mapChinesePathsAndUrlsToJapanese() {
+        assertEquals("/ja/actresses/miu-shiramine", toJapaneseLocalePath("/cn/actresses/miu-shiramine", "/cn"))
+        assertEquals(
+            "https://123av.com/ja/v/ipx-683-uncensored-leaked",
+            toJapaneseLocaleUrl("https://123av.com/cn/v/ipx-683-uncensored-leaked", "https://123av.com/", "/cn")
+        )
+        assertEquals("miu-shiramine", extractActressSlugFromPath("/cn/actresses/miu-shiramine"))
+        assertNull(extractActressSlugFromPath("/cn/actresses"))
+    }
+
+    @Test
+    fun parseDetailDocument_mergesNormalizedJapaneseActressNamesFromJaDoc() {
+        val cnHtml = """
+            <html><body>
+            <h1 class="watch__title">IPX-683</h1>
+            <div class="watch__info-row"><dt>演员</dt><dd><a href="/cn/actresses/miu-shiramine">Miu Shiramine</a> <a href="/cn/actresses/english-only">English Only</a></dd></div>
+            <div class="watch__info-row"><dt>类型</dt><dd><a href="/cn/genres/11">Drama</a></dd></div>
+            </body></html>
+        """.trimIndent()
+        val jaHtml = """
+            <html><body>
+            <h1 class="watch__title">IPX-683</h1>
+            <div class="watch__info-row"><dt>女優</dt><dd><a href="/ja/actresses/miu-shiramine">白峰ﾐｳ</a> <a href="/ja/actresses/english-only">English Only</a></dd></div>
+            <div class="watch__info-row"><dt>ジャンル</dt><dd><a href="/ja/genres/11">ドラマ</a></dd></div>
+            </body></html>
+        """.trimIndent()
+
+        val detail = source.parseDetailDocument(
+            doc = Jsoup.parse(cnHtml, "https://123av.com/"),
+            reference = Video(id = "ipx-683", title = "IPX-683", category = ""),
+            resolvedUrl = "https://123av.com/cn/v/ipx-683",
+            jaDoc = Jsoup.parse(jaHtml, "https://123av.com/")
+        )
+
+        requireNotNull(detail)
+        val actressChips = detail.infoRows.first { it.label == "演员" }.chips
+        assertEquals(2, actressChips.size)
+        assertEquals("Miu Shiramine", actressChips[0].text)
+        assertEquals("白峰ミウ", actressChips[0].japaneseName)
+        assertEquals("Miu Shiramine (白峰ミウ)", actressChips[0].displayText())
+        assertEquals("English Only", actressChips[1].displayText())
+        // 非演员胶囊保持原名
+        val genreChip = detail.infoRows.first { it.label == "类型" }.chips.first()
+        assertEquals("", genreChip.japaneseName)
+        assertEquals("Drama", genreChip.displayText())
+    }
+
+    @Test
+    fun parseChannelDocument_mergesNormalizedJapaneseActressProfileName() {
+        val cnHtml = """
+            <html><body>
+            <section class="ahero">
+              <div class="ahero__avatar" style="background-image:url('https://icdn.123av.me/miu.jpg')"></div>
+              <h1 class="ahero__name">Miu Shiramine</h1>
+              <div class="ahero__meta">170cm</div>
+            </section>
+            </body></html>
+        """.trimIndent()
+        val jaHtml = """
+            <html><body>
+            <section class="ahero">
+              <h1 class="ahero__name">白峰ﾐｳ</h1>
+            </section>
+            </body></html>
+        """.trimIndent()
+
+        val page = source.parseChannelDocument(
+            doc = Jsoup.parse(cnHtml, "https://123av.com/"),
+            label = "Miu Shiramine",
+            page = 1,
+            jaDoc = Jsoup.parse(jaHtml, "https://123av.com/")
+        )
+
+        val profile = requireNotNull(page.actressProfile)
+        assertEquals("Miu Shiramine", profile.name)
+        assertEquals("白峰ミウ", profile.japaneseName)
+        assertEquals("Miu Shiramine (白峰ミウ)", profile.displayName())
+    }
 }

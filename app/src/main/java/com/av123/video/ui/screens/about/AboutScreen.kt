@@ -70,6 +70,13 @@ internal data class ChangelogEntry(
 
 internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
     ChangelogEntry(
+        version = "v0.2.8",
+        highlights = listOf(
+            "视频详情页演员栏与演员详情页标题新增日文原名展示（英文名后附「(日文名)」）",
+            "同步抓取站点 `/ja/` 语种页面并将半角片假名及浊音/半浊音自动规范化为标准全角假名"
+        )
+    ),
+    ChangelogEntry(
         version = "v0.2.7",
         highlights = listOf(
             "修复应用锁超时重新锁定后指纹解锁回到首页的问题，解锁后直接恢复到锁定前所在页面与播放状态",

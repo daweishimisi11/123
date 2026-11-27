@@ -124,10 +124,29 @@ internal fun JsoupVideoDataSource.parseActresses(doc: Document): List<IndexEntry
  * 关注按钮的紧凑粉丝数是 Alpine x-text 渲染（静态 HTML 为空），
  * 直接复用“关注者”统计原文（如 16.3K）。页面无 .ahero 时返回 null。
  */
-internal fun JsoupVideoDataSource.parseActressProfile(doc: Document): ActressProfile? {
+internal fun JsoupVideoDataSource.parseActressProfile(
+    doc: Document,
+    jaDoc: Document? = null
+): ActressProfile? {
     val hero = doc.selectFirst(config.actressHeroSelector) ?: return null
     val name = hero.selectFirst(config.actressHeroName)?.text()?.trim().orEmpty()
     if (name.isBlank()) return null
+
+    val rawJaName = jaDoc
+        ?.selectFirst(config.actressHeroSelector)
+        ?.selectFirst(config.actressHeroName)
+        ?.text()
+        .orEmpty()
+    val normalizedJa = normalizeJapaneseKana(rawJaName)
+    val japaneseName = if (
+        normalizedJa.isNotBlank() &&
+        !normalizedJa.equals(name, ignoreCase = true) &&
+        hasJapaneseScript(normalizedJa)
+    ) {
+        normalizedJa
+    } else {
+        ""
+    }
 
     val avatarStyle = hero.selectFirst(config.actressHeroAvatar)
         ?.attr("style")?.trim().orEmpty()
@@ -151,7 +170,8 @@ internal fun JsoupVideoDataSource.parseActressProfile(doc: Document): ActressPro
         views = stats["观看"].orEmpty(),
         followers = followers,
         debut = stats["出道"].orEmpty(),
-        followersLabel = followers
+        followersLabel = followers,
+        japaneseName = japaneseName
     )
 }
 

@@ -47,4 +47,25 @@ class ActressHeroCardTest {
         composeRule.onNodeWithText("关注").assertIsDisplayed().performClick()
         assertTrue(toggled)
     }
+
+    @Test
+    fun actressHeroCard_appendsJapaneseNameAfterEnglishName() {
+        val profile = ActressProfile(
+            name = "Miu Shiramine",
+            japaneseName = "白峰ﾐｳ"
+        )
+
+        composeRule.setContent {
+            MaterialTheme {
+                ActressHeroCard(
+                    profile = profile,
+                    isFollowed = false,
+                    followEnabled = false,
+                    onToggleFollow = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Miu Shiramine (白峰ミウ)").assertIsDisplayed()
+    }
 }

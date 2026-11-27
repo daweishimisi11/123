@@ -17,7 +17,10 @@ import com.av123.video.data.db.AppJson
 import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.net.HttpClient
+import com.av123.video.data.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -161,14 +164,30 @@ class JsoupVideoDataSource(
     ): CategoryPage =
         withContext(Dispatchers.IO) {
             val url = buildListUrl(path, page, params)
-            parseChannelDocument(fetchDoc(url), label, page)
+            val jaActressUrl = if (page == 1 && extractActressSlugFromPath(path) != null) {
+                toJapaneseLocalePath(path.substringBefore('?'), config.localePath)
+                    ?.let { joinUrl(config.baseUrl, it) }
+            } else {
+                null
+            }
+            val (doc, jaDoc) = if (jaActressUrl != null && !jaActressUrl.equals(url, ignoreCase = true)) {
+                coroutineScope {
+                    val mainDeferred = async { fetchDoc(url) }
+                    val jaDeferred = async { runCatchingCancellable { fetchDoc(jaActressUrl) }.getOrNull() }
+                    mainDeferred.await() to jaDeferred.await()
+                }
+            } else {
+                fetchDoc(url) to null
+            }
+            parseChannelDocument(doc, label, page, jaDoc)
         }
 
     /** 分栏栏目/索引聚合页文档解析（与网络请求分离，便于单元测试） */
     internal fun parseChannelDocument(
         doc: Document,
         label: String,
-        page: Int
+        page: Int,
+        jaDoc: Document? = null
     ): CategoryPage {
         val entries = parseIndexEntries(doc)
                 .ifEmpty { parseIndexRows(doc) }
@@ -207,8 +226,8 @@ class JsoupVideoDataSource(
                 totalCountText = parsePageheadCountText(doc),
                 // 视频流页才有筛选表单（form.filters），随视频列表一起返回
                 filters = parseFilters(doc),
-                // 女演员个人页（/cn/actresses/<slug>）顶部 .ahero 资料；非该页为 null
-                actressProfile = parseActressProfile(doc)
+                // 女演员个人页（/cn/actresses/<slug>）顶部 .ahero 资料（含 /ja/ 补充的日文名）；非该页为 null
+                actressProfile = parseActressProfile(doc, jaDoc)
             )
         }
 
@@ -379,9 +398,20 @@ class JsoupVideoDataSource(
         val url = reference.sourcePageUrl.ifBlank {
             reference.detailPath.takeIf { it.isNotBlank() }?.let { joinUrl(config.baseUrl, it) }
         } ?: joinUrl(config.baseUrl, "${config.localePath}/${config.videoPathSegment}/${reference.id}")
+        val jaUrl = toJapaneseLocaleUrl(url, config.baseUrl, config.localePath)
         // 网络错误直接向上抛出，由仓库归一化为 AppError（此前 runCatching 吞异常
-        // 会让详情页无法区分“网络失败”与“页面无内容”，统一走仓库错误链路）
-        parseDetailWithRelated(fetchDoc(url), reference, url)
+        // 会让详情页无法区分“网络失败”与“页面无内容”，统一走仓库错误链路）；
+        // 日文页为辅助信息，失败时静默降级为仅展示英文名。
+        val (doc, jaDoc) = if (jaUrl != null && !jaUrl.equals(url, ignoreCase = true)) {
+            coroutineScope {
+                val mainDeferred = async { fetchDoc(url) }
+                val jaDeferred = async { runCatchingCancellable { fetchDoc(jaUrl) }.getOrNull() }
+                mainDeferred.await() to jaDeferred.await()
+            }
+        } else {
+            fetchDoc(url) to null
+        }
+        parseDetailWithRelated(doc, reference, url, jaDoc)
     }
 
     /**
@@ -391,9 +421,10 @@ class JsoupVideoDataSource(
     internal fun parseDetailWithRelated(
         doc: Document,
         reference: Video,
-        resolvedUrl: String
+        resolvedUrl: String,
+        jaDoc: Document? = null
     ): VideoDetail = VideoDetail(
-        video = parseDetailDocument(doc, reference, resolvedUrl),
+        video = parseDetailDocument(doc, reference, resolvedUrl, jaDoc),
         relatedStatic = selectRelatedCards(doc)
     )
 
@@ -404,7 +435,8 @@ class JsoupVideoDataSource(
     internal fun parseDetailDocument(
         doc: Document,
         reference: Video,
-        resolvedUrl: String
+        resolvedUrl: String,
+        jaDoc: Document? = null
     ): Video? {
         val title = doc.selectFirst(config.detailTitleSelector)?.text()?.trim().orEmpty()
 
@@ -427,6 +459,8 @@ class JsoupVideoDataSource(
             }
         }
 
+        val actressJapaneseNames = jaDoc?.let(::parseDetailActressJapaneseNames).orEmpty()
+
         // 详情键值对：dt 字段名 -> dd 字段值，按网页文档顺序保留；
         // chips 取 dd 内所有带 href 的同站链接（类型/演员/制作商/系列/类别/标签 等胶囊按钮），
         // 保留跳转路径供点击进入对应视频流；代码/发布日期等纯文本行 chips 为空
@@ -436,8 +470,13 @@ class JsoupVideoDataSource(
             val chips = dd.select("a[href]").mapNotNull { a ->
                 val name = a.text().trim()
                 val path = toSitePath(a.attr("href"))
-                if (name.isBlank() || path.isBlank() || extractVideoSlugFromPath(path) != null) null
-                else InfoChip(name, path)
+                if (name.isBlank() || path.isBlank() || extractVideoSlugFromPath(path) != null) {
+                    null
+                } else {
+                    val actressSlug = extractActressSlugFromPath(path)?.lowercase()
+                    val jaName = actressSlug?.let(actressJapaneseNames::get).orEmpty()
+                    InfoChip(name, path, jaName)
+                }
             }
             VideoInfoRow(
                 label = label,
@@ -491,6 +530,22 @@ class JsoupVideoDataSource(
             updatedAt = parsePublishedAgo(publishedAgo) ?: reference.updatedAt
         )
     }
+
+    /** 从 `/ja/v/...` 详情页提取 `演员 slug -> 全角规范化日文名` 映射（仅保留含日文字符的名称） */
+    private fun parseDetailActressJapaneseNames(jaDoc: Document): Map<String, String> =
+        buildMap {
+            jaDoc.select(config.detailInfoRow).forEach { row ->
+                val dd = row.selectFirst(config.detailInfoValue) ?: return@forEach
+                dd.select("a[href]").forEach { a ->
+                    val path = toSitePath(a.attr("href"))
+                    val slug = extractActressSlugFromPath(path)?.lowercase() ?: return@forEach
+                    val normalized = normalizeJapaneseKana(a.text())
+                    if (normalized.isNotBlank() && hasJapaneseScript(normalized)) {
+                        put(slug, normalized)
+                    }
+                }
+            }
+        }
 
     /**
      * 相关推荐解析（与网络请求分离，便于单元测试）：

@@ -227,7 +227,7 @@ internal fun ActressHeroCard(
                     .weight(1f)
                     .padding(start = 16.dp)) {
                     Text(
-                        text = profile.name,
+                        text = profile.displayName(),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,

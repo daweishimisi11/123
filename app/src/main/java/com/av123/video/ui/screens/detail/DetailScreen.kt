@@ -372,7 +372,7 @@ fun DetailScreen(
                         }
                     },
                     onRetry = { detailViewModel.retryResolve() },
-                    onChipClick = { chip -> onChannelClick(chip.text, chip.path) },
+                    onChipClick = { chip -> onChannelClick(chip.displayText(), chip.path) },
                     onCopyValue = onCopyValue,
                     relatedVideos = relatedVideos,
                     relatedLoading = relatedLoading,

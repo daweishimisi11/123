@@ -399,7 +399,7 @@ internal fun DetailInfoRow(
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
             ) {
                 row.chips.forEach { chip ->
-                    MetaChip(text = chip.text, onClick = { onChipClick(chip) })
+                    MetaChip(text = chip.displayText(), onClick = { onChipClick(chip) })
                 }
             }
         }
