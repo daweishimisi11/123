@@ -119,7 +119,7 @@ internal fun PlaybackStatsOverlay(
         stringResource(R.string.player_stat_state) to stats.state
     )
 
-    // 固定宽度 + 最大高度：底部永远不会越过屏幕，内容多时在卡片内滚动
+    // 固定紧凑宽度 + 最大高度：比例协调，底部不越界，内容多时卡片内滚动
     BoxWithConstraints(
         modifier = modifier
             .fillMaxHeight()
@@ -127,13 +127,13 @@ internal fun PlaybackStatsOverlay(
     ) {
         Column(
             modifier = Modifier
-                .width(300.dp)
+                .width(228.dp)
                 .heightIn(max = maxHeight)
                 .clip(AppShapes.Medium)
                 .background(Color(0xF2171214))
                 .border(1.dp, Color.White.copy(alpha = 0.08f), AppShapes.Medium)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -145,21 +145,21 @@ internal fun PlaybackStatsOverlay(
                 )
                 PopupCloseButton(onClick = onDismiss)
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(5.dp))
             StatGroup(
                 title = stringResource(R.string.player_stats_group_video),
                 cells = videoCells
             )
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             StatDivider()
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             StatGroup(
                 title = stringResource(R.string.player_stats_group_audio),
                 cells = audioCells
             )
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             StatDivider()
-            Spacer(modifier = Modifier.height(5.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             StatGroup(
                 title = stringResource(R.string.player_stats_group_playback),
                 cells = playbackCells
@@ -181,7 +181,7 @@ private fun StatGroup(title: String, cells: List<Pair<String, String>>) {
     cells.chunked(2).forEach { row ->
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             row.forEach { (label, value) ->
                 StatCell(

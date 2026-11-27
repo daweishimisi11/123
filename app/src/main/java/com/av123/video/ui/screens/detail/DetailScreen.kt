@@ -410,6 +410,22 @@ fun DetailScreen(
                         scope.launch { container.settingsStore.setCellularBufferSize(size) }
                     },
                     seekGestureSensitivity = appSettings.seekGestureSensitivity,
+                    showSpeedButton = appSettings.showSpeedButton,
+                    onShowSpeedButtonChange = { enabled ->
+                        scope.launch { container.settingsStore.setShowSpeedButton(enabled) }
+                    },
+                    showEpisodeButton = appSettings.showEpisodeButton,
+                    onShowEpisodeButtonChange = { enabled ->
+                        scope.launch { container.settingsStore.setShowEpisodeButton(enabled) }
+                    },
+                    showTrackButton = appSettings.showTrackButton,
+                    onShowTrackButtonChange = { enabled ->
+                        scope.launch { container.settingsStore.setShowTrackButton(enabled) }
+                    },
+                    speedOptions = appSettings.speedOptions,
+                    onSpeedOptionsChange = { speeds ->
+                        scope.launch { container.settingsStore.setSpeedOptions(speeds) }
+                    },
                     onEpisodeEnded = {
                         // 自动连播（可在"我的-播放设置"关闭）：存在下一集时切换，
                         // 末集或开关关闭时不动作，播放器停留/显示重播
@@ -616,6 +632,14 @@ private fun DetailContent(
         com.av123.video.data.prefs.VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (com.av123.video.data.prefs.VideoBufferSize) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
+    showSpeedButton: Boolean = true,
+    onShowSpeedButtonChange: (Boolean) -> Unit = {},
+    showEpisodeButton: Boolean = true,
+    onShowEpisodeButtonChange: (Boolean) -> Unit = {},
+    showTrackButton: Boolean = true,
+    onShowTrackButtonChange: (Boolean) -> Unit = {},
+    speedOptions: List<Float> = com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS,
+    onSpeedOptionsChange: (List<Float>) -> Unit = {},
     onEpisodeEnded: () -> Unit = {}
 ) {
     // 列表状态提升在全屏分支之外：进入全屏 LazyColumn 退出组合后，
@@ -655,6 +679,14 @@ private fun DetailContent(
             cellularBufferSize = cellularBufferSize,
             onCellularBufferSizeChange = onCellularBufferSizeChange,
             seekGestureSensitivity = seekGestureSensitivity,
+            showSpeedButton = showSpeedButton,
+            onShowSpeedButtonChange = onShowSpeedButtonChange,
+            showEpisodeButton = showEpisodeButton,
+            onShowEpisodeButtonChange = onShowEpisodeButtonChange,
+            showTrackButton = showTrackButton,
+            onShowTrackButtonChange = onShowTrackButtonChange,
+            speedOptions = speedOptions,
+            onSpeedOptionsChange = onSpeedOptionsChange,
             onEpisodeEnded = onEpisodeEnded,
             episodes = video.episodes,
             onSelectEpisode = onSelectEpisode,

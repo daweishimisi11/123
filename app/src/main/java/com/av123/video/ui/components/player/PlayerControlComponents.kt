@@ -35,6 +35,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -91,6 +92,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -144,6 +148,8 @@ import androidx.media3.ui.PlayerView
 import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
+import com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS
+import com.av123.video.data.prefs.formatPlaybackSpeed
 import com.av123.video.ui.theme.Motion
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
@@ -182,7 +188,8 @@ internal fun PlayerProgressSlider(
     duration: Long,
     bufferedPosition: Long,
     onSeek: (Long) -> Unit,
-    onDragStateChange: (Boolean) -> Unit = {}
+    onDragStateChange: (Boolean) -> Unit = {},
+    abLoopState: AbLoopState = AbLoopState()
 ) {
     val safeDuration = duration.coerceAtLeast(0L)
     val sliderPosition = remember(position, safeDuration) {
@@ -204,43 +211,93 @@ internal fun PlayerProgressSlider(
     // 水平跟随圆点中心，靠近两端时夹紧在进度条内，垂直溢出不影响布局且默认不裁剪
     Layout(
         content = {
-            Slider(
-                value = currentValue,
-                onValueChange = { draggingValue = it },
-                interactionSource = interactionSource,
-                onValueChangeFinished = {
-                    if (safeDuration > 0) {
-                        onSeek((draggingValue * safeDuration).toLong())
-                    }
-                    draggingValue = -1f
-                },
-                valueRange = 0f..1f,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.28f)
-                ),
-                thumb = {
-                    SliderDefaults.Thumb(
-                        interactionSource = interactionSource,
-                        thumbSize = DpSize(14.dp, 14.dp),
-                        colors = SliderDefaults.colors(thumbColor = Color.White)
-                    )
-                },
-                track = { sliderState ->
-                    SliderDefaults.Track(
-                        sliderState = sliderState,
-                        modifier = Modifier.height(4.dp),
-                        colors = SliderDefaults.colors(
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.28f)
-                        )
-                    )
-                },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(28.dp)
-            )
+            ) {
+                Slider(
+                    value = currentValue,
+                    onValueChange = { draggingValue = it },
+                    interactionSource = interactionSource,
+                    onValueChangeFinished = {
+                        if (safeDuration > 0) {
+                            onSeek((draggingValue * safeDuration).toLong())
+                        }
+                        draggingValue = -1f
+                    },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.28f)
+                    ),
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            interactionSource = interactionSource,
+                            thumbSize = DpSize(14.dp, 14.dp),
+                            colors = SliderDefaults.colors(thumbColor = Color.White)
+                        )
+                    },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            modifier = Modifier.height(4.dp),
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.28f)
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (safeDuration > 0L &&
+                    (abLoopState.pointAMs != null || abLoopState.pointBMs != null)
+                ) {
+                    val markerColor = Color(0xFFFFD54F)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val r = thumbRadius.toPx()
+                        val trackW = (size.width - r * 2f).coerceAtLeast(1f)
+                        val centerY = size.height / 2f
+                        val aFrac = abLoopState.pointAMs?.let {
+                            (it.toFloat() / safeDuration).coerceIn(0f, 1f)
+                        }
+                        val bFrac = abLoopState.pointBMs?.let {
+                            (it.toFloat() / safeDuration).coerceIn(0f, 1f)
+                        }
+                        if (aFrac != null && bFrac != null && bFrac > aFrac) {
+                            val aX = r + aFrac * trackW
+                            val bX = r + bFrac * trackW
+                            drawRoundRect(
+                                color = markerColor.copy(alpha = 0.72f),
+                                topLeft = Offset(aX, centerY - 2.dp.toPx()),
+                                size = Size((bX - aX).coerceAtLeast(2.dp.toPx()), 4.dp.toPx()),
+                                cornerRadius = CornerRadius(2.dp.toPx())
+                            )
+                        }
+                        val tickW = 2.5.dp.toPx()
+                        val tickH = 10.dp.toPx()
+                        aFrac?.let { frac ->
+                            val x = r + frac * trackW - tickW / 2f
+                            drawRoundRect(
+                                color = markerColor,
+                                topLeft = Offset(x, centerY - tickH / 2f),
+                                size = Size(tickW, tickH),
+                                cornerRadius = CornerRadius(tickW / 2f)
+                            )
+                        }
+                        bFrac?.let { frac ->
+                            val x = r + frac * trackW - tickW / 2f
+                            drawRoundRect(
+                                color = markerColor,
+                                topLeft = Offset(x, centerY - tickH / 2f),
+                                size = Size(tickW, tickH),
+                                cornerRadius = CornerRadius(tickW / 2f)
+                            )
+                        }
+                    }
+                }
+            }
 
             AnimatedVisibility(
                 visible = isDragging,
@@ -319,31 +376,25 @@ internal fun PlayerControlPillButton(
 internal fun SpeedPopupMenu(
     expanded: Boolean,
     selected: Float,
+    speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS,
     onSelected: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val speeds = listOf(0.5f, 1f, 1.25f, 1.5f, 2f, 3f)
+    val options = speedOptions.ifEmpty { DEFAULT_PLAYBACK_SPEEDS }
     AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
         PlayerFloatingOptionCard(
             title = stringResource(R.string.player_speed_title),
-            badge = "${selected}x",
-            width = 172.dp
+            badge = "${formatPlaybackSpeed(selected)}x",
+            minWidth = 112.dp,
+            maxWidth = 144.dp
         ) {
-            speeds.chunked(2).forEach { pair ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    pair.forEach { speed ->
-                        PlayerOptionTile(
-                            label = "${speed}x",
-                            selected = speed == selected,
-                            centered = true,
-                            onClick = { onSelected(speed) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+            options.forEach { speed ->
+                PlayerOptionTile(
+                    label = "${formatPlaybackSpeed(speed)}x",
+                    selected = kotlin.math.abs(speed - selected) < 0.001f,
+                    onClick = { onSelected(speed) },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -357,33 +408,23 @@ internal fun EpisodePopupMenu(
     onSelectEpisode: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val columns = if (episodes.size >= 3) 3 else 2
-    val cardWidth = if (columns == 3) 244.dp else 176.dp
     AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
         PlayerFloatingOptionCard(
             title = stringResource(R.string.player_episodes),
             badge = stringResource(R.string.player_episodes_count, episodes.size),
-            width = cardWidth
+            minWidth = 124.dp,
+            maxWidth = 176.dp
         ) {
-            episodes.indices.chunked(columns).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    row.forEach { index ->
-                        val label = episodes[index].name.ifBlank {
-                            stringResource(R.string.detail_episode_n, index + 1)
-                        }
-                        PlayerOptionTile(
-                            label = label,
-                            selected = index == selectedEpisodeIndex,
-                            centered = true,
-                            onClick = { onSelectEpisode(index) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            episodes.forEachIndexed { index, episode ->
+                val label = episode.name.ifBlank {
+                    stringResource(R.string.detail_episode_n, index + 1)
                 }
+                PlayerOptionTile(
+                    label = label,
+                    selected = index == selectedEpisodeIndex,
+                    onClick = { onSelectEpisode(index) },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -405,12 +446,12 @@ internal fun TrackPopupMenu(
     AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
         PlayerFloatingOptionCard(
             title = stringResource(R.string.player_track_title),
-            width = 196.dp
+            minWidth = 116.dp,
+            maxWidth = 168.dp
         ) {
             PlayerOptionTile(
                 label = autoLabel,
                 selected = selected == null,
-                showCheck = true,
                 onClick = { onSelected(null) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -418,8 +459,55 @@ internal fun TrackPopupMenu(
                 PlayerOptionTile(
                     label = track.label,
                     selected = track == selected,
-                    showCheck = true,
                     onClick = { onSelected(track) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun AbRepeatPopupMenu(
+    expanded: Boolean,
+    abLoopState: AbLoopState,
+    onSetPointA: () -> Unit,
+    onSetPointB: () -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val unsetLabel = stringResource(R.string.player_ab_unset)
+    val badge = when {
+        abLoopState.isActive -> stringResource(R.string.player_ab_badge_active)
+        abLoopState.pointAMs != null -> stringResource(R.string.player_ab_badge_a)
+        else -> null
+    }
+    AboveAnchorPopup(expanded = expanded, onDismiss = onDismiss) {
+        PlayerFloatingOptionCard(
+            title = stringResource(R.string.player_ab_title),
+            badge = badge,
+            minWidth = 152.dp,
+            maxWidth = 192.dp
+        ) {
+            PlayerOptionTile(
+                label = stringResource(R.string.player_ab_set_a),
+                trailingText = abLoopState.pointAMs?.let { formatDuration(it) } ?: unsetLabel,
+                selected = abLoopState.pointAMs != null,
+                onClick = onSetPointA,
+                modifier = Modifier.fillMaxWidth()
+            )
+            PlayerOptionTile(
+                label = stringResource(R.string.player_ab_set_b),
+                trailingText = abLoopState.pointBMs?.let { formatDuration(it) } ?: unsetLabel,
+                selected = abLoopState.pointBMs != null,
+                onClick = onSetPointB,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (abLoopState.pointAMs != null || abLoopState.pointBMs != null) {
+                PlayerOptionTile(
+                    label = stringResource(R.string.player_ab_clear),
+                    selected = false,
+                    onClick = onClear,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -479,13 +567,14 @@ private fun AboveAnchorPopup(
     }
 }
 
-/** 播放器底部三类选项卡（倍速 / 选集 / 清晰度）共用的深色毛玻璃浮卡容器 */
+/** 播放器底部选项卡（倍速 / 选集 / 清晰度 / A-B）共用的深色毛玻璃竖排浮卡容器 */
 @Composable
 private fun PlayerFloatingOptionCard(
     title: String,
-    width: Dp,
+    minWidth: Dp,
+    maxWidth: Dp,
     badge: String? = null,
-    maxHeight: Dp = 232.dp,
+    maxHeight: Dp = 212.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
@@ -494,29 +583,32 @@ private fun PlayerFloatingOptionCard(
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
         shadowElevation = 12.dp,
         modifier = Modifier
-            .width(width)
+            .widthIn(min = minWidth, max = maxWidth)
             .heightIn(max = maxHeight)
     ) {
-        Column {
+        Column(modifier = Modifier.width(IntrinsicSize.Max)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = title,
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = AppTypeScale.Label,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
+                    maxLines = 1
                 )
                 if (badge != null) {
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = badge,
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = AppTypeScale.Caption,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
                 }
             }
@@ -526,9 +618,10 @@ private fun PlayerFloatingOptionCard(
             )
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
                 content = content
             )
         }
@@ -541,15 +634,14 @@ private fun PlayerOptionTile(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    centered: Boolean = false,
-    showCheck: Boolean = false
+    trailingText: String? = null
 ) {
     val haptics = rememberAppHaptics()
     val primary = MaterialTheme.colorScheme.primary
     val shape = RoundedCornerShape(10.dp)
     Row(
         modifier = modifier
-            .height(36.dp)
+            .height(34.dp)
             .clip(shape)
             .background(
                 if (selected) primary.copy(alpha = 0.26f)
@@ -563,9 +655,9 @@ private fun PlayerOptionTile(
                 haptics.tick()
                 onClick()
             }
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
+        horizontalArrangement = if (trailingText != null) Arrangement.SpaceBetween else Arrangement.Center
     ) {
         Text(
             text = label,
@@ -574,15 +666,16 @@ private fun PlayerOptionTile(
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = if (centered) Modifier else Modifier.weight(1f)
+            textAlign = if (trailingText != null) TextAlign.Start else TextAlign.Center
         )
-        if (showCheck && selected) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(
-                imageVector = AppIcons.Check,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(15.dp)
+        if (trailingText != null) {
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = trailingText,
+                color = if (selected) Color.White.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.56f),
+                fontSize = AppTypeScale.Caption,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1
             )
         }
     }

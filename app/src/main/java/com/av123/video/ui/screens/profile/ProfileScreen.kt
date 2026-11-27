@@ -70,6 +70,7 @@ import com.av123.video.R
 import com.av123.video.data.prefs.AppLockTimeout
 import com.av123.video.data.prefs.DarkMode
 import com.av123.video.data.prefs.VideoBufferSize
+import com.av123.video.data.prefs.formatPlaybackSpeed
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
 import com.av123.video.ui.lock.AppLockToggleAction
@@ -119,6 +120,8 @@ fun ProfileScreen(
     var showLockTimeoutSheet by remember { mutableStateOf(false) }
     var showSeekSensitivitySheet by remember { mutableStateOf(false) }
     var showBufferSizeSheet by remember { mutableStateOf(false) }
+    var showPlayerButtonsSheet by remember { mutableStateOf(false) }
+    var showSpeedOptionsSheet by remember { mutableStateOf(false) }
     var showImportConfirm by remember { mutableStateOf(false) }
     var cacheSizeBytes by remember { mutableStateOf<Long?>(null) }
     // 从存储空间页清完缓存退回时，副标题的体积要跟着更新
@@ -648,6 +651,49 @@ fun ProfileScreen(
                             )
                         }
                     )
+                    SettingsDivider()
+                    val visibleButtonLabels = buildList {
+                        if (settings.showSpeedButton) add(stringResource(R.string.player_speed_title))
+                        if (settings.showEpisodeButton) add(stringResource(R.string.player_episodes))
+                        if (settings.showTrackButton) add(stringResource(R.string.player_track_title))
+                    }
+                    SettingsItem(
+                        icon = AppIcons.ViewAgendaOutlined,
+                        iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        title = stringResource(R.string.profile_player_buttons),
+                        subtitle = when (visibleButtonLabels.size) {
+                            3 -> stringResource(R.string.profile_player_buttons_all)
+                            0 -> stringResource(R.string.profile_player_buttons_none)
+                            else -> visibleButtonLabels.joinToString(" · ")
+                        },
+                        trailing = {
+                            Icon(
+                                AppIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        onClick = { showPlayerButtonsSheet = true }
+                    )
+                    SettingsDivider()
+                    SettingsItem(
+                        icon = AppIcons.PlaylistPlay,
+                        iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        title = stringResource(R.string.profile_speed_options),
+                        subtitle = settings.speedOptions.joinToString(" · ") {
+                            "${formatPlaybackSpeed(it)}x"
+                        },
+                        trailing = {
+                            Icon(
+                                AppIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        onClick = { showSpeedOptionsSheet = true }
+                    )
                 }
             }
 
@@ -735,6 +781,34 @@ fun ProfileScreen(
                 scope.launch { container.settingsStore.setCellularBufferSize(size) }
             },
             onDismiss = { showBufferSizeSheet = false }
+        )
+    }
+
+    if (showPlayerButtonsSheet) {
+        PlayerButtonsSheet(
+            showSpeedButton = settings.showSpeedButton,
+            showEpisodeButton = settings.showEpisodeButton,
+            showTrackButton = settings.showTrackButton,
+            onShowSpeedButtonChange = { enabled ->
+                scope.launch { container.settingsStore.setShowSpeedButton(enabled) }
+            },
+            onShowEpisodeButtonChange = { enabled ->
+                scope.launch { container.settingsStore.setShowEpisodeButton(enabled) }
+            },
+            onShowTrackButtonChange = { enabled ->
+                scope.launch { container.settingsStore.setShowTrackButton(enabled) }
+            },
+            onDismiss = { showPlayerButtonsSheet = false }
+        )
+    }
+
+    if (showSpeedOptionsSheet) {
+        SpeedOptionsSheet(
+            selectedSpeeds = settings.speedOptions,
+            onSpeedsChange = { speeds ->
+                scope.launch { container.settingsStore.setSpeedOptions(speeds) }
+            },
+            onDismiss = { showSpeedOptionsSheet = false }
         )
     }
 

@@ -69,9 +69,13 @@ import com.av123.video.LocalAppContainer
 import com.av123.video.R
 import com.av123.video.ui.theme.appCardContainerColor
 import com.av123.video.data.prefs.AppLockTimeout
+import com.av123.video.data.prefs.AVAILABLE_PLAYBACK_SPEEDS
+import com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS
 import com.av123.video.data.prefs.DarkMode
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.prefs.VideoBufferSize
+import com.av123.video.data.prefs.formatPlaybackSpeed
+import com.av123.video.data.prefs.togglePlaybackSpeedOption
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
 import com.av123.video.ui.lock.authenticateAppLock
@@ -667,6 +671,214 @@ private fun BufferNetworkSection(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/** 播放器底栏控制按钮显示设置弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PlayerButtonsSheet(
+    showSpeedButton: Boolean,
+    showEpisodeButton: Boolean,
+    showTrackButton: Boolean,
+    onShowSpeedButtonChange: (Boolean) -> Unit,
+    onShowEpisodeButtonChange: (Boolean) -> Unit,
+    onShowTrackButtonChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.profile_player_buttons),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_player_buttons_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(14.dp))
+            PlayerButtonToggleRow(
+                title = stringResource(R.string.player_button_speed),
+                desc = stringResource(R.string.player_button_speed_desc),
+                checked = showSpeedButton,
+                onCheckedChange = onShowSpeedButtonChange
+            )
+            HorizontalDivider(
+                thickness = 0.8.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            PlayerButtonToggleRow(
+                title = stringResource(R.string.player_button_episode),
+                desc = stringResource(R.string.player_button_episode_desc),
+                checked = showEpisodeButton,
+                onCheckedChange = onShowEpisodeButtonChange
+            )
+            HorizontalDivider(
+                thickness = 0.8.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            PlayerButtonToggleRow(
+                title = stringResource(R.string.player_button_track),
+                desc = stringResource(R.string.player_button_track_desc),
+                checked = showTrackButton,
+                onCheckedChange = onShowTrackButtonChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerButtonToggleRow(
+    title: String,
+    desc: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val haptics = rememberAppHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                haptics.tick()
+                onCheckedChange(!checked)
+            }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.tick()
+                onCheckedChange(it)
+            }
+        )
+    }
+}
+
+/** 播放器倍速菜单自定义选项弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SpeedOptionsSheet(
+    selectedSpeeds: List<Float>,
+    onSpeedsChange: (List<Float>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptics = rememberAppHaptics()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_speed_options),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (selectedSpeeds != DEFAULT_PLAYBACK_SPEEDS) {
+                    TextButton(
+                        onClick = {
+                            haptics.tick()
+                            onSpeedsChange(DEFAULT_PLAYBACK_SPEEDS)
+                        }
+                    ) {
+                        Text(stringResource(R.string.player_settings_reset_default))
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_speed_options_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+            AVAILABLE_PLAYBACK_SPEEDS.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row.forEach { speed ->
+                        val isSelected = selectedSpeeds.any {
+                            kotlin.math.abs(it - speed) < 0.001f
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(AppShapes.Medium)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                )
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = AppShapes.Medium
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable {
+                                    haptics.tick()
+                                    onSpeedsChange(
+                                        togglePlaybackSpeedOption(selectedSpeeds, speed)
+                                    )
+                                }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${formatPlaybackSpeed(speed)}x",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
     }
 }
 

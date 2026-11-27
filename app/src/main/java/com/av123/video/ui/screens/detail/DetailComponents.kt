@@ -105,6 +105,7 @@ import com.av123.video.data.model.InfoChip
 import com.av123.video.data.model.Video
 import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.model.VideoVersionLink
+import com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.components.ErrorState
@@ -658,6 +659,14 @@ internal fun PlayerArea(
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
+    showSpeedButton: Boolean = true,
+    onShowSpeedButtonChange: (Boolean) -> Unit = {},
+    showEpisodeButton: Boolean = true,
+    onShowEpisodeButtonChange: (Boolean) -> Unit = {},
+    showTrackButton: Boolean = true,
+    onShowTrackButtonChange: (Boolean) -> Unit = {},
+    speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS,
+    onSpeedOptionsChange: (List<Float>) -> Unit = {},
     onEpisodeEnded: () -> Unit = {},
     episodes: List<Episode> = emptyList(),
     onSelectEpisode: (Int) -> Unit = {}
@@ -698,6 +707,14 @@ internal fun PlayerArea(
             cellularBufferSize = cellularBufferSize,
             onCellularBufferSizeChange = onCellularBufferSizeChange,
             seekGestureSensitivity = seekGestureSensitivity,
+            showSpeedButton = showSpeedButton,
+            onShowSpeedButtonChange = onShowSpeedButtonChange,
+            showEpisodeButton = showEpisodeButton,
+            onShowEpisodeButtonChange = onShowEpisodeButtonChange,
+            showTrackButton = showTrackButton,
+            onShowTrackButtonChange = onShowTrackButtonChange,
+            speedOptions = speedOptions,
+            onSpeedOptionsChange = onSpeedOptionsChange,
             onEpisodeEnded = onEpisodeEnded,
             modifier = modifier.background(Color.Black)
         )

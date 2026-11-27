@@ -70,6 +70,14 @@ internal data class ChangelogEntry(
 
 internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
     ChangelogEntry(
+        version = "v0.2.9",
+        highlights = listOf(
+            "统一播放器底栏「倍速」「清晰度」「选集」浮层为竖向紧凑排列，收窄清晰度弹窗与「播放详情」浮层宽度，比例更协调",
+            "新增「A-B 重复」片段循环功能，支持设置 A/B 点并在进度条高亮显示循环区间",
+            "「我的 → 播放」与全屏设置内新增底栏三按钮独立显示开关及自定义倍速选项列表"
+        )
+    ),
+    ChangelogEntry(
         version = "v0.2.8",
         highlights = listOf(
             "视频详情页演员栏与演员详情页标题新增日文原名展示（英文名后附「(日文名)」）",

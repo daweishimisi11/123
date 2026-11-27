@@ -372,3 +372,66 @@ internal fun resolveVolumeMuteToggle(
     }
     return VolumeMuteAction.Unmute(restoreVolume = target)
 }
+
+/** A-B 重复起止点的最小有效间隔（毫秒） */
+internal const val MIN_AB_LOOP_GAP_MS = 500L
+
+/** 播放器 A-B 片段循环状态；仅当 A、B 均已设置且 B > A 时激活循环 */
+internal data class AbLoopState(
+    val pointAMs: Long? = null,
+    val pointBMs: Long? = null
+) {
+    val isActive: Boolean
+        get() = pointAMs != null && pointBMs != null && pointBMs > pointAMs
+}
+
+/**
+ * 设置 A 点：若已有 B 点且新 A 点不早于 B - [MIN_AB_LOOP_GAP_MS]，自动清空旧 B 点以等待重设。
+ */
+internal fun setAbLoopPointA(
+    state: AbLoopState,
+    positionMs: Long,
+    durationMs: Long
+): AbLoopState {
+    val maxPos = durationMs.coerceAtLeast(0L)
+    val clamped = if (maxPos > 0L) positionMs.coerceIn(0L, maxPos) else positionMs.coerceAtLeast(0L)
+    val keepB = state.pointBMs?.takeIf { clamped <= it - MIN_AB_LOOP_GAP_MS }
+    return AbLoopState(pointAMs = clamped, pointBMs = keepB)
+}
+
+/**
+ * 设置 B 点：
+ * - 若尚未设置 A 点，默认以 0ms 作为 A 点（要求 B >= [MIN_AB_LOOP_GAP_MS]）；
+ * - 若 B 早于已有 A 点至少 [MIN_AB_LOOP_GAP_MS]，自动交换为 [B, A]；
+ * - 若与 A 点间隔不足 [MIN_AB_LOOP_GAP_MS]，保持原状态不变。
+ */
+internal fun setAbLoopPointB(
+    state: AbLoopState,
+    positionMs: Long,
+    durationMs: Long
+): AbLoopState {
+    val maxPos = durationMs.coerceAtLeast(0L)
+    val clamped = if (maxPos > 0L) positionMs.coerceIn(0L, maxPos) else positionMs.coerceAtLeast(0L)
+    val a = state.pointAMs ?: return if (clamped >= MIN_AB_LOOP_GAP_MS) {
+        AbLoopState(pointAMs = 0L, pointBMs = clamped)
+    } else {
+        state
+    }
+    return when {
+        clamped >= a + MIN_AB_LOOP_GAP_MS -> AbLoopState(pointAMs = a, pointBMs = clamped)
+        clamped <= a - MIN_AB_LOOP_GAP_MS -> AbLoopState(pointAMs = clamped, pointBMs = a)
+        else -> state
+    }
+}
+
+/** 判断当前播放进度是否到达 B 点并需要回跳到 A 点；拖动进度条期间不触发 */
+internal fun shouldTriggerAbLoopSeek(
+    state: AbLoopState,
+    positionMs: Long,
+    isSeeking: Boolean
+): Long? {
+    if (isSeeking || !state.isActive) return null
+    val a = state.pointAMs ?: return null
+    val b = state.pointBMs ?: return null
+    return if (positionMs >= b) a else null
+}

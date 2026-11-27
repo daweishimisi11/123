@@ -149,6 +149,7 @@ import androidx.media3.ui.PlayerView
 import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
+import com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS
 import com.av123.video.data.prefs.SeekGestureSensitivity
 import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.lock.LocalAppLockState
@@ -259,7 +260,15 @@ fun VideoPlayer(
     onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
-    seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
+    seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
+    showSpeedButton: Boolean = true,
+    onShowSpeedButtonChange: (Boolean) -> Unit = {},
+    showEpisodeButton: Boolean = true,
+    onShowEpisodeButtonChange: (Boolean) -> Unit = {},
+    showTrackButton: Boolean = true,
+    onShowTrackButtonChange: (Boolean) -> Unit = {},
+    speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS,
+    onSpeedOptionsChange: (List<Float>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -380,6 +389,9 @@ fun VideoPlayer(
     var activeTrackHeight by remember(player) { mutableIntStateOf(0) }
     // 播放统计浮层（类似 YouTube “统计信息”）
     var showPlaybackStats by remember { mutableStateOf(false) }
+    // A-B 片段重复状态（换集/换源自动复位）
+    var abLoopState by remember(player) { mutableStateOf(AbLoopState()) }
+    val currentAbLoopState by rememberUpdatedState(abLoopState)
     // 横滑 Seek：松手将跳转到的目标位置（null=未拖动）；以 player 为 key，
     // 重新抓流更换播放器实例时拖动状态一并复位
     var seekPreviewTargetMs by remember(player) { mutableStateOf<Long?>(null) }
@@ -532,10 +544,20 @@ fun VideoPlayer(
                     retryAttempts = 0
                     onPlaybackReady()
                 }
-                // 本集播放结束：交由调用方决定自动连播下一集（末集不动作，显示重播）
-                if (state == Player.STATE_ENDED && !endedNotified) {
-                    endedNotified = true
-                    episodeEndedCallback()
+                // 本集播放结束：若 A-B 循环生效中，优先回到 A 点续播，不触发自动连播下一集
+                if (state == Player.STATE_ENDED) {
+                    val activeLoop = currentAbLoopState
+                    if (activeLoop.isActive) {
+                        val targetA = activeLoop.pointAMs!!
+                        player.seekTo(targetA)
+                        position = targetA
+                        player.playWhenReady = true
+                        return
+                    }
+                    if (!endedNotified) {
+                        endedNotified = true
+                        episodeEndedCallback()
+                    }
                 }
             }
 
@@ -577,19 +599,36 @@ fun VideoPlayer(
     // 防止主线程卡顿或 tick 漂移造成虚高。
     // player 也是 key：换源后必须重启轮询，否则协程还在读已 release 的旧实例，
     // 进度条与时间会一直停在切换前（2026-10-23 换集后进度条卡住）
-    LaunchedEffect(player, isPlaying, playbackState) {
+    LaunchedEffect(player, isPlaying, playbackState, abLoopState.isActive) {
+        val pollIntervalMs = if (abLoopState.isActive) 100L else POSITION_POLL_MS
         var lastTickMs = SystemClock.elapsedRealtime()
         while (true) {
             val now = SystemClock.elapsedRealtime()
             if (isPlaying && error == null) {
-                val elapsedMs = (now - lastTickMs).coerceIn(0L, POSITION_POLL_MS * 2L)
+                val elapsedMs = (now - lastTickMs).coerceIn(0L, pollIntervalMs * 2L)
                 if (elapsedMs > 0L) playingElapsedCallback(elapsedMs)
             }
             lastTickMs = now
-            position = player.currentPosition
-            duration = player.duration.coerceAtLeast(0L)
+            val currentPos = player.currentPosition
+            val currentDur = player.duration.coerceAtLeast(0L)
+            val loopTargetA = if (error == null) {
+                shouldTriggerAbLoopSeek(
+                    state = currentAbLoopState,
+                    positionMs = currentPos,
+                    isSeeking = isSeeking
+                )
+            } else {
+                null
+            }
+            if (loopTargetA != null) {
+                player.seekTo(loopTargetA)
+                position = loopTargetA
+            } else {
+                position = currentPos
+            }
+            duration = currentDur
             bufferedPosition = player.bufferedPosition
-            delay(POSITION_POLL_MS.milliseconds)
+            delay(pollIntervalMs.milliseconds)
         }
     }
 
@@ -1199,6 +1238,30 @@ fun VideoPlayer(
                 onWifiBufferSizeChange = onWifiBufferSizeChange,
                 cellularBufferSize = cellularBufferSize,
                 onCellularBufferSizeChange = onCellularBufferSizeChange,
+                abLoopState = abLoopState,
+                onSetAbPointA = {
+                    abLoopState = setAbLoopPointA(
+                        state = abLoopState,
+                        positionMs = player.currentPosition,
+                        durationMs = duration
+                    )
+                },
+                onSetAbPointB = {
+                    abLoopState = setAbLoopPointB(
+                        state = abLoopState,
+                        positionMs = player.currentPosition,
+                        durationMs = duration
+                    )
+                },
+                onClearAbLoop = { abLoopState = AbLoopState() },
+                showSpeedButton = showSpeedButton,
+                onShowSpeedButtonChange = onShowSpeedButtonChange,
+                showEpisodeButton = showEpisodeButton,
+                onShowEpisodeButtonChange = onShowEpisodeButtonChange,
+                showTrackButton = showTrackButton,
+                onShowTrackButtonChange = onShowTrackButtonChange,
+                speedOptions = speedOptions,
+                onSpeedOptionsChange = onSpeedOptionsChange,
                 modifier = Modifier.fillMaxSize()
             )
         }

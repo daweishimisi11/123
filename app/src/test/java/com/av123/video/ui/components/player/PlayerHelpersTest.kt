@@ -323,4 +323,31 @@ class PlayerHelpersTest {
         assertEquals(BufferHealthLevel.FAIR, resolveBufferHealthLevel(6.0f))
         assertEquals(BufferHealthLevel.GOOD, resolveBufferHealthLevel(12.4f))
     }
+
+    @Test
+    fun `ab loop helpers set points, swap reversed points, and trigger loop seek accurately`() {
+        val initial = AbLoopState()
+        assertFalse(initial.isActive)
+
+        // 未设 A 点直接设 B 点（>= 500ms）时默认从 0ms 开始循环
+        val bOnly = setAbLoopPointB(initial, positionMs = 15_000L, durationMs = 60_000L)
+        assertEquals(AbLoopState(pointAMs = 0L, pointBMs = 15_000L), bOnly)
+        assertTrue(bOnly.isActive)
+
+        // 设 A 点：若新 A 点晚于旧 B 点附近，自动清空旧 B 点等待重设
+        val movedA = setAbLoopPointA(bOnly, positionMs = 20_000L, durationMs = 60_000L)
+        assertEquals(AbLoopState(pointAMs = 20_000L, pointBMs = null), movedA)
+        assertFalse(movedA.isActive)
+
+        // 再设一个早于 A 点的 B 点：自动交换为 [B, A]
+        val swapped = setAbLoopPointB(movedA, positionMs = 8_000L, durationMs = 60_000L)
+        assertEquals(AbLoopState(pointAMs = 8_000L, pointBMs = 20_000L), swapped)
+        assertTrue(swapped.isActive)
+
+        // 正常设 B 点与触发回跳检查（拖动进度条期间不触发）
+        assertNull(shouldTriggerAbLoopSeek(swapped, positionMs = 19_900L, isSeeking = false))
+        assertNull(shouldTriggerAbLoopSeek(swapped, positionMs = 20_100L, isSeeking = true))
+        assertEquals(8_000L, shouldTriggerAbLoopSeek(swapped, positionMs = 20_000L, isSeeking = false))
+        assertEquals(8_000L, shouldTriggerAbLoopSeek(swapped, positionMs = 20_250L, isSeeking = false))
+    }
 }

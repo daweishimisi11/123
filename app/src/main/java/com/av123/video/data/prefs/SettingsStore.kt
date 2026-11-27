@@ -8,8 +8,61 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlin.math.abs
 
 private val Context.settingsDataStore by preferencesDataStore(name = "app_settings")
+
+/** 支持在设置中勾选的倍速候选列表（升序） */
+val AVAILABLE_PLAYBACK_SPEEDS: List<Float> =
+    listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+
+/** 默认展示的倍速选项 */
+val DEFAULT_PLAYBACK_SPEEDS: List<Float> =
+    listOf(0.5f, 1f, 1.25f, 1.5f, 2f, 3f)
+
+/** 格式化倍速数值（2.0 -> "2"，1.25 -> "1.25"） */
+fun formatPlaybackSpeed(speed: Float): String =
+    if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()
+
+/** 从存储字符串反序列化倍速选项；非法或空值时回退到默认集合 */
+fun parsePlaybackSpeedOptions(raw: String?): List<Float> {
+    if (raw.isNullOrBlank()) return DEFAULT_PLAYBACK_SPEEDS
+    val parsed = raw.split(',')
+        .mapNotNull { token ->
+            val value = token.trim().toFloatOrNull() ?: return@mapNotNull null
+            AVAILABLE_PLAYBACK_SPEEDS.firstOrNull { abs(it - value) < 0.001f }
+        }
+        .distinct()
+        .sorted()
+    return parsed.ifEmpty { DEFAULT_PLAYBACK_SPEEDS }
+}
+
+/** 将已选倍速选项规范化并序列化为逗号分隔字符串 */
+fun serializePlaybackSpeedOptions(speeds: List<Float>): String {
+    val normalized = speeds
+        .mapNotNull { value ->
+            AVAILABLE_PLAYBACK_SPEEDS.firstOrNull { abs(it - value) < 0.001f }
+        }
+        .distinct()
+        .sorted()
+        .ifEmpty { DEFAULT_PLAYBACK_SPEEDS }
+    return normalized.joinToString(",") { formatPlaybackSpeed(it) }
+}
+
+/** 切换某个倍速选项的显示状态；至少保留 1 个选项，避免倍速菜单为空 */
+fun togglePlaybackSpeedOption(current: List<Float>, target: Float): List<Float> {
+    val canonical = AVAILABLE_PLAYBACK_SPEEDS.firstOrNull { abs(it - target) < 0.001f }
+        ?: return current
+    val normalizedCurrent = AVAILABLE_PLAYBACK_SPEEDS.filter { candidate ->
+        current.any { abs(it - candidate) < 0.001f }
+    }
+    val exists = normalizedCurrent.any { abs(it - canonical) < 0.001f }
+    if (exists) {
+        if (normalizedCurrent.size <= 1) return normalizedCurrent
+        return normalizedCurrent.filterNot { abs(it - canonical) < 0.001f }
+    }
+    return (normalizedCurrent + canonical).distinct().sorted()
+}
 
 /** 深色模式偏好 */
 enum class DarkMode { SYSTEM, LIGHT, DARK }
@@ -105,7 +158,15 @@ data class AppSettings(
     /** Wi-Fi（及有线等非计费网络）下的视频向前预缓冲大小 */
     val wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
     /** 数据流量（蜂窝/计费网络）下的视频向前预缓冲大小 */
-    val cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR
+    val cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
+    /** 是否在播放器底栏显示倍速按钮 */
+    val showSpeedButton: Boolean = true,
+    /** 是否在全屏播放器底栏显示选集按钮 */
+    val showEpisodeButton: Boolean = true,
+    /** 是否在全屏播放器底栏显示清晰度按钮 */
+    val showTrackButton: Boolean = true,
+    /** 倍速菜单中显示的可选倍速列表 */
+    val speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS
 )
 
 /**
@@ -182,7 +243,11 @@ class SettingsStore(context: Context) {
                 VideoBufferSize.valueOf(
                     prefs[KEY_CELLULAR_BUFFER_SIZE] ?: VideoBufferSize.DEFAULT_CELLULAR.name
                 )
-            }.getOrDefault(VideoBufferSize.DEFAULT_CELLULAR)
+            }.getOrDefault(VideoBufferSize.DEFAULT_CELLULAR),
+            showSpeedButton = prefs[KEY_SHOW_SPEED_BUTTON] ?: true,
+            showEpisodeButton = prefs[KEY_SHOW_EPISODE_BUTTON] ?: true,
+            showTrackButton = prefs[KEY_SHOW_TRACK_BUTTON] ?: true,
+            speedOptions = parsePlaybackSpeedOptions(prefs[KEY_SPEED_OPTIONS])
         )
     }.onEach { writeStartupMirror(it) }
 
@@ -250,6 +315,22 @@ class SettingsStore(context: Context) {
         store.edit { it[KEY_CELLULAR_BUFFER_SIZE] = size.name }
     }
 
+    suspend fun setShowSpeedButton(enabled: Boolean) {
+        store.edit { it[KEY_SHOW_SPEED_BUTTON] = enabled }
+    }
+
+    suspend fun setShowEpisodeButton(enabled: Boolean) {
+        store.edit { it[KEY_SHOW_EPISODE_BUTTON] = enabled }
+    }
+
+    suspend fun setShowTrackButton(enabled: Boolean) {
+        store.edit { it[KEY_SHOW_TRACK_BUTTON] = enabled }
+    }
+
+    suspend fun setSpeedOptions(speeds: List<Float>) {
+        store.edit { it[KEY_SPEED_OPTIONS] = serializePlaybackSpeedOptions(speeds) }
+    }
+
     private companion object {
         const val STARTUP_PREFS = "startup_settings"
         const val STARTUP_KEY_DARK_MODE = "dark_mode"
@@ -269,5 +350,9 @@ class SettingsStore(context: Context) {
         val KEY_SHOW_BUFFER_HEALTH = booleanPreferencesKey("show_buffer_health")
         val KEY_WIFI_BUFFER_SIZE = stringPreferencesKey("wifi_buffer_size")
         val KEY_CELLULAR_BUFFER_SIZE = stringPreferencesKey("cellular_buffer_size")
+        val KEY_SHOW_SPEED_BUTTON = booleanPreferencesKey("show_speed_button")
+        val KEY_SHOW_EPISODE_BUTTON = booleanPreferencesKey("show_episode_button")
+        val KEY_SHOW_TRACK_BUTTON = booleanPreferencesKey("show_track_button")
+        val KEY_SPEED_OPTIONS = stringPreferencesKey("playback_speed_options")
     }
 }

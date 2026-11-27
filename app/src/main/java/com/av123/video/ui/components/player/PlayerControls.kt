@@ -151,7 +151,11 @@ import androidx.media3.ui.PlayerView
 import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
+import com.av123.video.data.prefs.AVAILABLE_PLAYBACK_SPEEDS
+import com.av123.video.data.prefs.DEFAULT_PLAYBACK_SPEEDS
 import com.av123.video.data.prefs.VideoBufferSize
+import com.av123.video.data.prefs.formatPlaybackSpeed
+import com.av123.video.data.prefs.togglePlaybackSpeedOption
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
@@ -205,6 +209,18 @@ internal fun PlayerControls(
     onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    abLoopState: AbLoopState = AbLoopState(),
+    onSetAbPointA: () -> Unit = {},
+    onSetAbPointB: () -> Unit = {},
+    onClearAbLoop: () -> Unit = {},
+    showSpeedButton: Boolean = true,
+    onShowSpeedButtonChange: (Boolean) -> Unit = {},
+    showEpisodeButton: Boolean = true,
+    onShowEpisodeButtonChange: (Boolean) -> Unit = {},
+    showTrackButton: Boolean = true,
+    onShowTrackButtonChange: (Boolean) -> Unit = {},
+    speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS,
+    onSpeedOptionsChange: (List<Float>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -227,6 +243,7 @@ internal fun PlayerControls(
     var showSpeedSheet by remember { mutableStateOf(false) }
     var showTrackSheet by remember { mutableStateOf(false) }
     var showEpisodeSheet by remember { mutableStateOf(false) }
+    var showAbRepeatSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
     var volume by remember {
         mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC))
@@ -282,9 +299,29 @@ internal fun PlayerControls(
         }
     }
 
-    LaunchedEffect(showSpeedSheet, showTrackSheet, showEpisodeSheet, showSettingsSheet) {
+    LaunchedEffect(showSpeedButton) {
+        if (!showSpeedButton) showSpeedSheet = false
+    }
+    LaunchedEffect(showEpisodeButton) {
+        if (!showEpisodeButton) showEpisodeSheet = false
+    }
+    LaunchedEffect(showTrackButton) {
+        if (!showTrackButton) showTrackSheet = false
+    }
+
+    LaunchedEffect(
+        showSpeedSheet,
+        showTrackSheet,
+        showEpisodeSheet,
+        showAbRepeatSheet,
+        showSettingsSheet
+    ) {
         onControlPopupVisibleChange(
-            showSpeedSheet || showTrackSheet || showEpisodeSheet || showSettingsSheet
+            showSpeedSheet ||
+                showTrackSheet ||
+                showEpisodeSheet ||
+                showAbRepeatSheet ||
+                showSettingsSheet
         )
     }
 
@@ -440,6 +477,9 @@ internal fun PlayerControls(
                             onClick = {
                                 haptics.tick()
                                 showEpisodeSheet = false
+                                showSpeedSheet = false
+                                showTrackSheet = false
+                                showAbRepeatSheet = false
                                 showSettingsSheet = true
                             },
                             modifier = Modifier.size(40.dp)
@@ -494,7 +534,8 @@ internal fun PlayerControls(
                 duration = duration,
                 bufferedPosition = bufferedPosition,
                 onSeek = onSeek,
-                onDragStateChange = onSeekDragStateChange
+                onDragStateChange = onSeekDragStateChange,
+                abLoopState = abLoopState
             )
 
             Row(
@@ -533,30 +574,72 @@ internal fun PlayerControls(
                 Spacer(modifier = Modifier.weight(1f))
 
                 Box {
+                    val abLabel = when {
+                        abLoopState.isActive -> stringResource(R.string.player_ab_repeat)
+                        abLoopState.pointAMs != null -> "A·${formatDuration(abLoopState.pointAMs)}"
+                        else -> stringResource(R.string.player_ab_repeat)
+                    }
                     PlayerControlPillButton(
-                        text = "${selectedSpeed}x",
-                        active = showSpeedSheet,
+                        text = abLabel,
+                        active = showAbRepeatSheet || abLoopState.pointAMs != null,
                         onClick = {
                             haptics.tick()
+                            showSpeedSheet = false
                             showEpisodeSheet = false
                             showTrackSheet = false
                             showSettingsSheet = false
-                            showSpeedSheet = !showSpeedSheet
+                            showAbRepeatSheet = !showAbRepeatSheet
                         }
                     )
-                    SpeedPopupMenu(
-                        expanded = showSpeedSheet,
-                        selected = selectedSpeed,
-                        onSelected = {
-                            onSpeedChange(it)
-                            showSpeedSheet = false
+                    AbRepeatPopupMenu(
+                        expanded = showAbRepeatSheet,
+                        abLoopState = abLoopState,
+                        onSetPointA = {
+                            onSetAbPointA()
+                            showAbRepeatSheet = false
                         },
-                        onDismiss = { showSpeedSheet = false }
+                        onSetPointB = {
+                            onSetAbPointB()
+                            showAbRepeatSheet = false
+                        },
+                        onClear = {
+                            onClearAbLoop()
+                            showAbRepeatSheet = false
+                        },
+                        onDismiss = { showAbRepeatSheet = false }
                     )
                 }
 
-                // 选集：只在全屏且确实有多集时出现，与倍速/清晰度统一采用上方浮动选项卡
-                if (isFullscreen && episodes.size > 1) {
+                if (showSpeedButton) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box {
+                        PlayerControlPillButton(
+                            text = "${formatPlaybackSpeed(selectedSpeed)}x",
+                            active = showSpeedSheet,
+                            onClick = {
+                                haptics.tick()
+                                showAbRepeatSheet = false
+                                showEpisodeSheet = false
+                                showTrackSheet = false
+                                showSettingsSheet = false
+                                showSpeedSheet = !showSpeedSheet
+                            }
+                        )
+                        SpeedPopupMenu(
+                            expanded = showSpeedSheet,
+                            selected = selectedSpeed,
+                            speedOptions = speedOptions,
+                            onSelected = {
+                                onSpeedChange(it)
+                                showSpeedSheet = false
+                            },
+                            onDismiss = { showSpeedSheet = false }
+                        )
+                    }
+                }
+
+                // 选集：只在全屏、开启按钮显示且确实有多集时出现，与倍速/清晰度统一采用上方浮动选项卡
+                if (showEpisodeButton && isFullscreen && episodes.size > 1) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Box {
                         PlayerControlPillButton(
@@ -566,6 +649,7 @@ internal fun PlayerControls(
                             active = showEpisodeSheet,
                             onClick = {
                                 haptics.tick()
+                                showAbRepeatSheet = false
                                 showSpeedSheet = false
                                 showTrackSheet = false
                                 showSettingsSheet = false
@@ -585,7 +669,7 @@ internal fun PlayerControls(
                     }
                 }
 
-                if (isFullscreen && availableTracks.isNotEmpty()) {
+                if (showTrackButton && isFullscreen && availableTracks.isNotEmpty()) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Box {
                         PlayerControlPillButton(
@@ -598,6 +682,7 @@ internal fun PlayerControls(
                             maxWidth = 96.dp,
                             onClick = {
                                 haptics.tick()
+                                showAbRepeatSheet = false
                                 showSpeedSheet = false
                                 showEpisodeSheet = false
                                 showSettingsSheet = false
@@ -706,6 +791,14 @@ internal fun PlayerControls(
                 onWifiBufferSizeChange = onWifiBufferSizeChange,
                 cellularBufferSize = cellularBufferSize,
                 onCellularBufferSizeChange = onCellularBufferSizeChange,
+                showSpeedButton = showSpeedButton,
+                onShowSpeedButtonChange = onShowSpeedButtonChange,
+                showEpisodeButton = showEpisodeButton,
+                onShowEpisodeButtonChange = onShowEpisodeButtonChange,
+                showTrackButton = showTrackButton,
+                onShowTrackButtonChange = onShowTrackButtonChange,
+                speedOptions = speedOptions,
+                onSpeedOptionsChange = onSpeedOptionsChange,
                 onShowStats = {
                     showSettingsSheet = false
                     onShowPlaybackStats()
@@ -752,6 +845,8 @@ private fun PlayerSideSheetDrawer(
     }
 }
 
+private enum class PlayerSettingsPage { MAIN, BUFFER, BUTTONS, SPEEDS }
+
 /** 全屏设置：右侧滑出面板，倍速 / 选集 / 清晰度均由底栏对应浮动选项卡控制 */
 @Composable
 internal fun SettingsSheet(
@@ -765,13 +860,21 @@ internal fun SettingsSheet(
     onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
     cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
     onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    showSpeedButton: Boolean = true,
+    onShowSpeedButtonChange: (Boolean) -> Unit = {},
+    showEpisodeButton: Boolean = true,
+    onShowEpisodeButtonChange: (Boolean) -> Unit = {},
+    showTrackButton: Boolean = true,
+    onShowTrackButtonChange: (Boolean) -> Unit = {},
+    speedOptions: List<Float> = DEFAULT_PLAYBACK_SPEEDS,
+    onSpeedOptionsChange: (List<Float>) -> Unit = {},
     onShowStats: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var showBufferPage by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(PlayerSettingsPage.MAIN) }
 
-    BackHandler(enabled = showBufferPage) {
-        showBufferPage = false
+    BackHandler(enabled = currentPage != PlayerSettingsPage.MAIN) {
+        currentPage = PlayerSettingsPage.MAIN
     }
 
     Column(
@@ -782,110 +885,250 @@ internal fun SettingsSheet(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        if (!showBufferPage) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.player_settings_title),
-                    color = Color.White,
-                    fontSize = AppTypeScale.BodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = AppIcons.Close,
-                        contentDescription = stringResource(R.string.common_close),
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(20.dp)
+        when (currentPage) {
+            PlayerSettingsPage.MAIN -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.player_settings_title),
+                        color = Color.White,
+                        fontSize = AppTypeScale.BodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
                     )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            imageVector = AppIcons.Close,
+                            contentDescription = stringResource(R.string.common_close),
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.profile_auto_next),
+                    checked = autoPlayNext,
+                    onCheckedChange = onAutoPlayNextChange
+                )
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.profile_flip_to_exit),
+                    checked = flipToExitEnabled,
+                    onCheckedChange = onFlipToExitChange
+                )
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.player_settings_buffer_health),
+                    checked = showBufferHealth,
+                    onCheckedChange = onShowBufferHealthChange
+                )
+                SettingsSheetDivider()
+                val enabledCount = listOf(
+                    showSpeedButton,
+                    showEpisodeButton,
+                    showTrackButton
+                ).count { it }
+                SettingsSheetRow(
+                    label = stringResource(R.string.player_settings_buttons),
+                    value = when (enabledCount) {
+                        3 -> stringResource(R.string.profile_player_buttons_all)
+                        0 -> stringResource(R.string.profile_player_buttons_none)
+                        else -> "$enabledCount/3"
+                    },
+                    onClick = { currentPage = PlayerSettingsPage.BUTTONS }
+                )
+                SettingsSheetDivider()
+                SettingsSheetRow(
+                    label = stringResource(R.string.profile_speed_options),
+                    value = stringResource(
+                        R.string.player_settings_speed_options_count,
+                        speedOptions.size
+                    ),
+                    onClick = { currentPage = PlayerSettingsPage.SPEEDS }
+                )
+                SettingsSheetDivider()
+                SettingsSheetRow(
+                    label = stringResource(R.string.player_settings_buffer_size),
+                    value = stringResource(
+                        R.string.player_settings_buffer_compact_summary,
+                        wifiBufferSize.maxSeconds,
+                        cellularBufferSize.maxSeconds
+                    ),
+                    onClick = { currentPage = PlayerSettingsPage.BUFFER }
+                )
+                SettingsSheetDivider()
+                SettingsSheetRow(
+                    label = stringResource(R.string.player_menu_stats),
+                    onClick = onShowStats
+                )
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            SettingsSheetDivider()
-            SettingsSheetSwitchRow(
-                label = stringResource(R.string.profile_auto_next),
-                checked = autoPlayNext,
-                onCheckedChange = onAutoPlayNextChange
-            )
-            SettingsSheetDivider()
-            SettingsSheetSwitchRow(
-                label = stringResource(R.string.profile_flip_to_exit),
-                checked = flipToExitEnabled,
-                onCheckedChange = onFlipToExitChange
-            )
-            SettingsSheetDivider()
-            SettingsSheetSwitchRow(
-                label = stringResource(R.string.player_settings_buffer_health),
-                checked = showBufferHealth,
-                onCheckedChange = onShowBufferHealthChange
-            )
-            SettingsSheetDivider()
-            SettingsSheetRow(
-                label = stringResource(R.string.player_settings_buffer_size),
-                value = stringResource(
-                    R.string.player_settings_buffer_compact_summary,
-                    wifiBufferSize.maxSeconds,
-                    cellularBufferSize.maxSeconds
-                ),
-                onClick = { showBufferPage = true }
-            )
-            SettingsSheetDivider()
-            SettingsSheetRow(
-                label = stringResource(R.string.player_menu_stats),
-                onClick = onShowStats
-            )
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { showBufferPage = false },
-                    modifier = Modifier.size(36.dp)
+
+            PlayerSettingsPage.BUFFER -> {
+                SettingsSheetSubHeader(
+                    title = stringResource(R.string.player_settings_buffer_size),
+                    onBack = { currentPage = PlayerSettingsPage.MAIN },
+                    onDismiss = onDismiss
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                SettingsSheetBufferGroup(
+                    icon = AppIcons.Wifi,
+                    title = stringResource(R.string.profile_buffer_network_wifi),
+                    selected = wifiBufferSize,
+                    onSelect = onWifiBufferSizeChange
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                SettingsSheetDivider()
+                Spacer(modifier = Modifier.height(14.dp))
+                SettingsSheetBufferGroup(
+                    icon = AppIcons.SignalCellularAlt,
+                    title = stringResource(R.string.profile_buffer_network_cellular),
+                    selected = cellularBufferSize,
+                    onSelect = onCellularBufferSizeChange
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.player_settings_buffer_auto_note),
+                    color = Color.White.copy(alpha = 0.48f),
+                    fontSize = AppTypeScale.Caption,
+                    lineHeight = 16.sp
+                )
+            }
+
+            PlayerSettingsPage.BUTTONS -> {
+                SettingsSheetSubHeader(
+                    title = stringResource(R.string.profile_player_buttons),
+                    onBack = { currentPage = PlayerSettingsPage.MAIN },
+                    onDismiss = onDismiss
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.player_button_speed),
+                    checked = showSpeedButton,
+                    onCheckedChange = onShowSpeedButtonChange
+                )
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.player_button_episode),
+                    checked = showEpisodeButton,
+                    onCheckedChange = onShowEpisodeButtonChange
+                )
+                SettingsSheetDivider()
+                SettingsSheetSwitchRow(
+                    label = stringResource(R.string.player_button_track),
+                    checked = showTrackButton,
+                    onCheckedChange = onShowTrackButtonChange
+                )
+            }
+
+            PlayerSettingsPage.SPEEDS -> {
+                SettingsSheetSubHeader(
+                    title = stringResource(R.string.profile_speed_options),
+                    onBack = { currentPage = PlayerSettingsPage.MAIN },
+                    onDismiss = onDismiss
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                AVAILABLE_PLAYBACK_SPEEDS.chunked(3).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        row.forEach { speed ->
+                            val isSelected = speedOptions.any {
+                                kotlin.math.abs(it - speed) < 0.001f
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .clip(AppShapes.Small)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else Color.White.copy(alpha = 0.08f)
+                                    )
+                                    .clickable {
+                                        onSpeedOptionsChange(
+                                            togglePlaybackSpeedOption(speedOptions, speed)
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${formatPlaybackSpeed(speed)}x",
+                                    color = if (isSelected) Color.White
+                                    else Color.White.copy(alpha = 0.78f),
+                                    fontSize = AppTypeScale.Label,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold
+                                    else FontWeight.Normal,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = AppIcons.ArrowBack,
-                        contentDescription = stringResource(R.string.common_back),
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = stringResource(R.string.player_settings_speed_min_hint),
+                        color = Color.White.copy(alpha = 0.48f),
+                        fontSize = AppTypeScale.Caption
                     )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.player_settings_buffer_size),
-                    color = Color.White,
-                    fontSize = AppTypeScale.BodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = AppIcons.Close,
-                        contentDescription = stringResource(R.string.common_close),
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (speedOptions != DEFAULT_PLAYBACK_SPEEDS) {
+                        Text(
+                            text = stringResource(R.string.player_settings_reset_default),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = AppTypeScale.Caption,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(AppShapes.Small)
+                                .clickable { onSpeedOptionsChange(DEFAULT_PLAYBACK_SPEEDS) }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSheetBufferGroup(
-                icon = AppIcons.Wifi,
-                title = stringResource(R.string.profile_buffer_network_wifi),
-                selected = wifiBufferSize,
-                onSelect = onWifiBufferSizeChange
+        }
+    }
+}
+
+@Composable
+private fun SettingsSheetSubHeader(
+    title: String,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = AppIcons.ArrowBack,
+                contentDescription = stringResource(R.string.common_back),
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.height(14.dp))
-            SettingsSheetDivider()
-            Spacer(modifier = Modifier.height(14.dp))
-            SettingsSheetBufferGroup(
-                icon = AppIcons.SignalCellularAlt,
-                title = stringResource(R.string.profile_buffer_network_cellular),
-                selected = cellularBufferSize,
-                onSelect = onCellularBufferSizeChange
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.player_settings_buffer_auto_note),
-                color = Color.White.copy(alpha = 0.48f),
-                fontSize = AppTypeScale.Caption,
-                lineHeight = 16.sp
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = AppTypeScale.BodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = AppIcons.Close,
+                contentDescription = stringResource(R.string.common_close),
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -988,7 +1231,7 @@ private fun SettingsSheetSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(44.dp)
             .clickable { onCheckedChange(!checked) },
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1011,7 +1254,7 @@ private fun SettingsSheetRow(label: String, value: String? = null, onClick: () -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(44.dp)
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
