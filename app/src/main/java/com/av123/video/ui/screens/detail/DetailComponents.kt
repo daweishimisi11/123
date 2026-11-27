@@ -107,6 +107,7 @@ import com.av123.video.data.model.VideoInfoRow
 import com.av123.video.data.model.VideoVersionLink
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
+import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.components.ErrorState
 import com.av123.video.ui.components.LoadingState
 import com.av123.video.ui.components.VideoGridCard
@@ -653,6 +654,10 @@ internal fun PlayerArea(
     onFlipToExitChange: (Boolean) -> Unit = {},
     showBufferHealth: Boolean = false,
     onShowBufferHealthChange: (Boolean) -> Unit = {},
+    wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+    onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
+    onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
@@ -691,6 +696,10 @@ internal fun PlayerArea(
             onFlipToExitChange = onFlipToExitChange,
             showBufferHealth = showBufferHealth,
             onShowBufferHealthChange = onShowBufferHealthChange,
+            wifiBufferSize = wifiBufferSize,
+            onWifiBufferSizeChange = onWifiBufferSizeChange,
+            cellularBufferSize = cellularBufferSize,
+            onCellularBufferSizeChange = onCellularBufferSizeChange,
             resizeMode = resizeMode,
             onResizeModeChange = onResizeModeChange,
             seekGestureSensitivity = seekGestureSensitivity,

@@ -152,6 +152,7 @@ import com.av123.video.MainActivity
 import com.av123.video.R
 import com.av123.video.data.model.Episode
 import com.av123.video.data.prefs.ResizeModeOption
+import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
@@ -201,6 +202,10 @@ internal fun PlayerControls(
     onFlipToExitChange: (Boolean) -> Unit,
     showBufferHealth: Boolean = false,
     onShowBufferHealthChange: (Boolean) -> Unit = {},
+    wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+    onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
+    onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
     resizeMode: ResizeModeOption,
     onResizeModeChange: (ResizeModeOption) -> Unit,
     modifier: Modifier = Modifier
@@ -735,6 +740,10 @@ internal fun PlayerControls(
                 onFlipToExitChange = onFlipToExitChange,
                 showBufferHealth = showBufferHealth,
                 onShowBufferHealthChange = onShowBufferHealthChange,
+                wifiBufferSize = wifiBufferSize,
+                onWifiBufferSizeChange = onWifiBufferSizeChange,
+                cellularBufferSize = cellularBufferSize,
+                onCellularBufferSizeChange = onCellularBufferSizeChange,
                 onShowStats = {
                     showSettingsSheet = false
                     onShowPlaybackStats()
@@ -868,9 +877,19 @@ internal fun SettingsSheet(
     onFlipToExitChange: (Boolean) -> Unit,
     showBufferHealth: Boolean = false,
     onShowBufferHealthChange: (Boolean) -> Unit = {},
+    wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+    onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
+    onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
     onShowStats: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var showBufferPage by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = showBufferPage) {
+        showBufferPage = false
+    }
+
     Column(
         modifier = Modifier
             .width(280.dp)
@@ -879,86 +898,239 @@ internal fun SettingsSheet(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.player_settings_title),
-                color = Color.White,
-                fontSize = AppTypeScale.BodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    imageVector = AppIcons.Close,
-                    contentDescription = stringResource(R.string.common_close),
-                    tint = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.size(20.dp)
+        if (!showBufferPage) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.player_settings_title),
+                    color = Color.White,
+                    fontSize = AppTypeScale.BodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.player_resize_title),
-            color = Color.White.copy(alpha = 0.55f),
-            fontSize = AppTypeScale.Label
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ResizeModeOption.entries.forEach { option ->
-                val selected = option == resizeMode
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .clip(AppShapes.Small)
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primary
-                            else Color.White.copy(alpha = 0.08f)
-                        )
-                        .clickable { onResizeModeChange(option) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = when (option) {
-                            ResizeModeOption.FIT -> stringResource(R.string.player_resize_fit)
-                            ResizeModeOption.FILL -> stringResource(R.string.player_resize_fill)
-                            ResizeModeOption.ZOOM -> stringResource(R.string.player_resize_zoom)
-                        },
-                        color = if (selected) Color.White
-                        else Color.White.copy(alpha = 0.75f),
-                        fontSize = AppTypeScale.Label,
-                        fontWeight = if (selected) FontWeight.SemiBold
-                        else FontWeight.Normal,
-                        maxLines = 1
+                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        imageVector = AppIcons.Close,
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.player_resize_title),
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = AppTypeScale.Label
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ResizeModeOption.entries.forEach { option ->
+                    val selected = option == resizeMode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .clip(AppShapes.Small)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primary
+                                else Color.White.copy(alpha = 0.08f)
+                            )
+                            .clickable { onResizeModeChange(option) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (option) {
+                                ResizeModeOption.FIT -> stringResource(R.string.player_resize_fit)
+                                ResizeModeOption.FILL -> stringResource(R.string.player_resize_fill)
+                                ResizeModeOption.ZOOM -> stringResource(R.string.player_resize_zoom)
+                            },
+                            color = if (selected) Color.White
+                            else Color.White.copy(alpha = 0.75f),
+                            fontSize = AppTypeScale.Label,
+                            fontWeight = if (selected) FontWeight.SemiBold
+                            else FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSheetDivider()
+            SettingsSheetSwitchRow(
+                label = stringResource(R.string.profile_auto_next),
+                checked = autoPlayNext,
+                onCheckedChange = onAutoPlayNextChange
+            )
+            SettingsSheetDivider()
+            SettingsSheetSwitchRow(
+                label = stringResource(R.string.profile_flip_to_exit),
+                checked = flipToExitEnabled,
+                onCheckedChange = onFlipToExitChange
+            )
+            SettingsSheetDivider()
+            SettingsSheetSwitchRow(
+                label = stringResource(R.string.player_settings_buffer_health),
+                checked = showBufferHealth,
+                onCheckedChange = onShowBufferHealthChange
+            )
+            SettingsSheetDivider()
+            SettingsSheetRow(
+                label = stringResource(R.string.player_settings_buffer_size),
+                value = stringResource(
+                    R.string.player_settings_buffer_compact_summary,
+                    wifiBufferSize.maxSeconds,
+                    cellularBufferSize.maxSeconds
+                ),
+                onClick = { showBufferPage = true }
+            )
+            SettingsSheetDivider()
+            SettingsSheetRow(
+                label = stringResource(R.string.player_menu_stats),
+                onClick = onShowStats
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { showBufferPage = false },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = AppIcons.ArrowBack,
+                        contentDescription = stringResource(R.string.common_back),
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.player_settings_buffer_size),
+                    color = Color.White,
+                    fontSize = AppTypeScale.BodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        imageVector = AppIcons.Close,
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSheetBufferGroup(
+                icon = AppIcons.Wifi,
+                title = stringResource(R.string.profile_buffer_network_wifi),
+                selected = wifiBufferSize,
+                onSelect = onWifiBufferSizeChange
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            SettingsSheetDivider()
+            Spacer(modifier = Modifier.height(14.dp))
+            SettingsSheetBufferGroup(
+                icon = AppIcons.SignalCellularAlt,
+                title = stringResource(R.string.profile_buffer_network_cellular),
+                selected = cellularBufferSize,
+                onSelect = onCellularBufferSizeChange
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.player_settings_buffer_auto_note),
+                color = Color.White.copy(alpha = 0.48f),
+                fontSize = AppTypeScale.Caption,
+                lineHeight = 16.sp
+            )
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        SettingsSheetDivider()
-        SettingsSheetSwitchRow(
-            label = stringResource(R.string.profile_auto_next),
-            checked = autoPlayNext,
-            onCheckedChange = onAutoPlayNextChange
+    }
+}
+
+@Composable
+private fun SettingsSheetBufferGroup(
+    icon: ImageVector,
+    title: String,
+    selected: VideoBufferSize,
+    onSelect: (VideoBufferSize) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(16.dp)
         )
-        SettingsSheetDivider()
-        SettingsSheetSwitchRow(
-            label = stringResource(R.string.profile_flip_to_exit),
-            checked = flipToExitEnabled,
-            onCheckedChange = onFlipToExitChange
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = title,
+            color = Color.White.copy(alpha = 0.9f),
+            fontSize = AppTypeScale.Body,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
         )
-        SettingsSheetDivider()
-        SettingsSheetSwitchRow(
-            label = stringResource(R.string.player_settings_buffer_health),
-            checked = showBufferHealth,
-            onCheckedChange = onShowBufferHealthChange
-        )
-        SettingsSheetDivider()
-        SettingsSheetRow(
-            label = stringResource(R.string.player_menu_stats),
-            onClick = onShowStats
+        Text(
+            text = bufferTierLabel(selected),
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = AppTypeScale.Caption,
+            fontWeight = FontWeight.SemiBold
         )
     }
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        VideoBufferSize.entries.forEach { option ->
+            val isSelected = option == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(34.dp)
+                    .clip(AppShapes.Small)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary
+                        else Color.White.copy(alpha = 0.08f)
+                    )
+                    .clickable { onSelect(option) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = bufferShortLabel(option),
+                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.78f),
+                    fontSize = AppTypeScale.Caption,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = bufferDescLabel(selected),
+        color = Color.White.copy(alpha = 0.52f),
+        fontSize = AppTypeScale.Caption,
+        lineHeight = 16.sp
+    )
+}
+
+@Composable
+private fun bufferShortLabel(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra)
+}
+
+@Composable
+private fun bufferTierLabel(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small_tier)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard_tier)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large_tier)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra_tier)
+}
+
+@Composable
+private fun bufferDescLabel(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small_desc)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard_desc)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large_desc)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra_desc)
 }
 
 @Composable

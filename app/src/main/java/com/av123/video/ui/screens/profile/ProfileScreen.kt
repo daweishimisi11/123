@@ -69,6 +69,7 @@ import com.av123.video.LocalBottomBarInset
 import com.av123.video.R
 import com.av123.video.data.prefs.AppLockTimeout
 import com.av123.video.data.prefs.DarkMode
+import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
 import com.av123.video.ui.lock.AppLockToggleAction
@@ -117,6 +118,7 @@ fun ProfileScreen(
     var showLockUnavailableDialog by remember { mutableStateOf(false) }
     var showLockTimeoutSheet by remember { mutableStateOf(false) }
     var showSeekSensitivitySheet by remember { mutableStateOf(false) }
+    var showBufferSizeSheet by remember { mutableStateOf(false) }
     var showImportConfirm by remember { mutableStateOf(false) }
     var cacheSizeBytes by remember { mutableStateOf<Long?>(null) }
     // 从存储空间页清完缓存退回时，副标题的体积要跟着更新
@@ -610,6 +612,26 @@ fun ProfileScreen(
                     )
                     SettingsDivider()
                     SettingsItem(
+                        icon = AppIcons.Router,
+                        iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        title = stringResource(R.string.profile_buffer_size),
+                        subtitle = stringResource(
+                            R.string.profile_buffer_size_summary,
+                            videoBufferSizeLabel(settings.wifiBufferSize),
+                            videoBufferSizeLabel(settings.cellularBufferSize)
+                        ),
+                        trailing = {
+                            Icon(
+                                AppIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        onClick = { showBufferSizeSheet = true }
+                    )
+                    SettingsDivider()
+                    SettingsItem(
                         icon = AppIcons.Timer,
                         iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -699,6 +721,20 @@ fun ProfileScreen(
                 scope.launch { container.settingsStore.setSeekGestureSensitivity(sensitivity) }
                 showSeekSensitivitySheet = false
             }
+        )
+    }
+
+    if (showBufferSizeSheet) {
+        VideoBufferSizeSheet(
+            wifiBufferSize = settings.wifiBufferSize,
+            cellularBufferSize = settings.cellularBufferSize,
+            onWifiBufferSizeChange = { size ->
+                scope.launch { container.settingsStore.setWifiBufferSize(size) }
+            },
+            onCellularBufferSizeChange = { size ->
+                scope.launch { container.settingsStore.setCellularBufferSize(size) }
+            },
+            onDismiss = { showBufferSizeSheet = false }
         )
     }
 

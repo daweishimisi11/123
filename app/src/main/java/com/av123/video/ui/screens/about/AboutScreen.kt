@@ -70,6 +70,13 @@ internal data class ChangelogEntry(
 
 internal val APP_CHANGELOG: List<ChangelogEntry> = listOf(
     ChangelogEntry(
+        version = "v0.2.6",
+        highlights = listOf(
+            "新增视频播放缓冲大小调节功能（「我的 → 播放」及全屏设置内可配置）",
+            "支持分别为 Wi-Fi 与数据流量设置预缓冲时长（15 秒 / 30 秒 / 60 秒 / 120 秒），播放时按网络自动切换并即时生效"
+        )
+    ),
+    ChangelogEntry(
         version = "v0.2.5",
         highlights = listOf(
             "重设计「我的 → 版本」抽屉比例：改为紧凑横向头部与全展开布局，打开即可同时看到检查更新与全部入口"

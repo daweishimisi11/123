@@ -40,6 +40,52 @@ enum class SeekGestureSensitivity(val fullSwipeSeconds: Int) {
     FAST(180)
 }
 
+/**
+ * 视频播放缓冲大小档位（ExoPlayer 向前预缓冲时长阈值）：
+ * - [SMALL] 15 秒（省流）：min 10s / max 15s，起播 1.5s / 重缓冲恢复 3s
+ * - [STANDARD] 30 秒（适中）：min 20s / max 30s，起播 2s / 重缓冲恢复 4s
+ * - [LARGE] 60 秒（畅享）：min 40s / max 60s，起播 2.5s / 重缓冲恢复 5s
+ * - [ULTRA] 120 秒（超大）：min 60s / max 120s，起播 2.5s / 重缓冲恢复 5s
+ */
+enum class VideoBufferSize(
+    val minBufferMs: Int,
+    val maxBufferMs: Int,
+    val bufferForPlaybackMs: Int,
+    val bufferForPlaybackAfterRebufferMs: Int
+) {
+    SMALL(
+        minBufferMs = 10_000,
+        maxBufferMs = 15_000,
+        bufferForPlaybackMs = 1_500,
+        bufferForPlaybackAfterRebufferMs = 3_000
+    ),
+    STANDARD(
+        minBufferMs = 20_000,
+        maxBufferMs = 30_000,
+        bufferForPlaybackMs = 2_000,
+        bufferForPlaybackAfterRebufferMs = 4_000
+    ),
+    LARGE(
+        minBufferMs = 40_000,
+        maxBufferMs = 60_000,
+        bufferForPlaybackMs = 2_500,
+        bufferForPlaybackAfterRebufferMs = 5_000
+    ),
+    ULTRA(
+        minBufferMs = 60_000,
+        maxBufferMs = 120_000,
+        bufferForPlaybackMs = 2_500,
+        bufferForPlaybackAfterRebufferMs = 5_000
+    );
+
+    val maxSeconds: Int get() = maxBufferMs / 1_000
+
+    companion object {
+        val DEFAULT_WIFI = LARGE
+        val DEFAULT_CELLULAR = SMALL
+    }
+}
+
 /** 全局外观与播放设置 */
 data class AppSettings(
     val dynamicColor: Boolean = false,
@@ -65,7 +111,11 @@ data class AppSettings(
     /** 横滑快进/快退手势灵敏度，默认适中（适合几秒到几十秒微调） */
     val seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
     /** 全屏播放时是否在左上角常驻显示缓冲健康秒数 */
-    val showBufferHealth: Boolean = false
+    val showBufferHealth: Boolean = false,
+    /** Wi-Fi（及有线等非计费网络）下的视频向前预缓冲大小 */
+    val wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+    /** 数据流量（蜂窝/计费网络）下的视频向前预缓冲大小 */
+    val cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR
 )
 
 /**
@@ -135,7 +185,17 @@ class SettingsStore(context: Context) {
                     prefs[KEY_SEEK_GESTURE_SENSITIVITY] ?: SeekGestureSensitivity.STANDARD.name
                 )
             }.getOrDefault(SeekGestureSensitivity.STANDARD),
-            showBufferHealth = prefs[KEY_SHOW_BUFFER_HEALTH] ?: false
+            showBufferHealth = prefs[KEY_SHOW_BUFFER_HEALTH] ?: false,
+            wifiBufferSize = runCatching {
+                VideoBufferSize.valueOf(
+                    prefs[KEY_WIFI_BUFFER_SIZE] ?: VideoBufferSize.DEFAULT_WIFI.name
+                )
+            }.getOrDefault(VideoBufferSize.DEFAULT_WIFI),
+            cellularBufferSize = runCatching {
+                VideoBufferSize.valueOf(
+                    prefs[KEY_CELLULAR_BUFFER_SIZE] ?: VideoBufferSize.DEFAULT_CELLULAR.name
+                )
+            }.getOrDefault(VideoBufferSize.DEFAULT_CELLULAR)
         )
     }.onEach { writeStartupMirror(it) }
 
@@ -199,6 +259,14 @@ class SettingsStore(context: Context) {
         store.edit { it[KEY_SHOW_BUFFER_HEALTH] = enabled }
     }
 
+    suspend fun setWifiBufferSize(size: VideoBufferSize) {
+        store.edit { it[KEY_WIFI_BUFFER_SIZE] = size.name }
+    }
+
+    suspend fun setCellularBufferSize(size: VideoBufferSize) {
+        store.edit { it[KEY_CELLULAR_BUFFER_SIZE] = size.name }
+    }
+
     private companion object {
         const val STARTUP_PREFS = "startup_settings"
         const val STARTUP_KEY_DARK_MODE = "dark_mode"
@@ -217,5 +285,7 @@ class SettingsStore(context: Context) {
         val KEY_SECURE_SCREEN = booleanPreferencesKey("secure_screen")
         val KEY_SEEK_GESTURE_SENSITIVITY = stringPreferencesKey("seek_gesture_sensitivity")
         val KEY_SHOW_BUFFER_HEALTH = booleanPreferencesKey("show_buffer_health")
+        val KEY_WIFI_BUFFER_SIZE = stringPreferencesKey("wifi_buffer_size")
+        val KEY_CELLULAR_BUFFER_SIZE = stringPreferencesKey("cellular_buffer_size")
     }
 }

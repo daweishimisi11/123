@@ -402,6 +402,14 @@ fun DetailScreen(
                     onShowBufferHealthChange = { enabled ->
                         scope.launch { container.settingsStore.setShowBufferHealth(enabled) }
                     },
+                    wifiBufferSize = appSettings.wifiBufferSize,
+                    onWifiBufferSizeChange = { size ->
+                        scope.launch { container.settingsStore.setWifiBufferSize(size) }
+                    },
+                    cellularBufferSize = appSettings.cellularBufferSize,
+                    onCellularBufferSizeChange = { size ->
+                        scope.launch { container.settingsStore.setCellularBufferSize(size) }
+                    },
                     resizeMode = appSettings.videoResizeMode,
                     onResizeModeChange = { mode ->
                         scope.launch { container.settingsStore.setVideoResizeMode(mode) }
@@ -606,6 +614,12 @@ private fun DetailContent(
     onFlipToExitChange: (Boolean) -> Unit = {},
     showBufferHealth: Boolean = false,
     onShowBufferHealthChange: (Boolean) -> Unit = {},
+    wifiBufferSize: com.av123.video.data.prefs.VideoBufferSize =
+        com.av123.video.data.prefs.VideoBufferSize.DEFAULT_WIFI,
+    onWifiBufferSizeChange: (com.av123.video.data.prefs.VideoBufferSize) -> Unit = {},
+    cellularBufferSize: com.av123.video.data.prefs.VideoBufferSize =
+        com.av123.video.data.prefs.VideoBufferSize.DEFAULT_CELLULAR,
+    onCellularBufferSizeChange: (com.av123.video.data.prefs.VideoBufferSize) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD,
@@ -643,6 +657,10 @@ private fun DetailContent(
             onFlipToExitChange = onFlipToExitChange,
             showBufferHealth = showBufferHealth,
             onShowBufferHealthChange = onShowBufferHealthChange,
+            wifiBufferSize = wifiBufferSize,
+            onWifiBufferSizeChange = onWifiBufferSizeChange,
+            cellularBufferSize = cellularBufferSize,
+            onCellularBufferSizeChange = onCellularBufferSizeChange,
             resizeMode = resizeMode,
             onResizeModeChange = onResizeModeChange,
             seekGestureSensitivity = seekGestureSensitivity,

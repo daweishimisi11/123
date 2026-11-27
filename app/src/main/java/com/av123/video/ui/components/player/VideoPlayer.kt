@@ -151,6 +151,7 @@ import com.av123.video.R
 import com.av123.video.data.model.Episode
 import com.av123.video.data.prefs.ResizeModeOption
 import com.av123.video.data.prefs.SeekGestureSensitivity
+import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.ui.util.AppLog
 import com.av123.video.ui.util.findActivity
 import com.av123.video.ui.util.formatDuration
@@ -254,6 +255,10 @@ fun VideoPlayer(
     onFlipToExitChange: (Boolean) -> Unit = {},
     showBufferHealth: Boolean = false,
     onShowBufferHealthChange: (Boolean) -> Unit = {},
+    wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+    onWifiBufferSizeChange: (VideoBufferSize) -> Unit = {},
+    cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR,
+    onCellularBufferSizeChange: (VideoBufferSize) -> Unit = {},
     resizeMode: ResizeModeOption = ResizeModeOption.FIT,
     onResizeModeChange: (ResizeModeOption) -> Unit = {},
     seekGestureSensitivity: SeekGestureSensitivity = SeekGestureSensitivity.STANDARD
@@ -265,7 +270,16 @@ fun VideoPlayer(
 
     // 初始化/复用 ExoPlayer；ViewModel 保证实例跨配置变更存活
     val player = remember(url, headers) {
-        playerViewModel.initialize(context.applicationContext, url, headers)
+        playerViewModel.initialize(
+            context = context.applicationContext,
+            url = url,
+            headers = headers,
+            wifiBufferSize = wifiBufferSize,
+            cellularBufferSize = cellularBufferSize
+        )
+    }
+    LaunchedEffect(wifiBufferSize, cellularBufferSize) {
+        playerViewModel.updateBufferConfig(wifiBufferSize, cellularBufferSize)
     }
 
     // PiP 源区域：AndroidView factory 创建后持有 PlayerView 引用，
@@ -1168,6 +1182,10 @@ fun VideoPlayer(
                 onFlipToExitChange = onFlipToExitChange,
                 showBufferHealth = showBufferHealth,
                 onShowBufferHealthChange = onShowBufferHealthChange,
+                wifiBufferSize = wifiBufferSize,
+                onWifiBufferSizeChange = onWifiBufferSizeChange,
+                cellularBufferSize = cellularBufferSize,
+                onCellularBufferSizeChange = onCellularBufferSizeChange,
                 resizeMode = resizeMode,
                 onResizeModeChange = onResizeModeChange,
                 modifier = Modifier.fillMaxSize()

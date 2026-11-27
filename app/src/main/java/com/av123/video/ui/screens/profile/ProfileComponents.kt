@@ -71,6 +71,7 @@ import com.av123.video.ui.theme.appCardContainerColor
 import com.av123.video.data.prefs.AppLockTimeout
 import com.av123.video.data.prefs.DarkMode
 import com.av123.video.data.prefs.SeekGestureSensitivity
+import com.av123.video.data.prefs.VideoBufferSize
 import com.av123.video.data.repository.BackupImportResult
 import com.av123.video.data.repository.formatCacheSize
 import com.av123.video.ui.lock.authenticateAppLock
@@ -489,6 +490,183 @@ internal fun SeekSensitivitySheet(
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+internal fun videoBufferSizeLabel(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra)
+}
+
+@Composable
+internal fun videoBufferSizeTierLabel(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small_tier)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard_tier)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large_tier)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra_tier)
+}
+
+@Composable
+internal fun videoBufferSizeDesc(size: VideoBufferSize): String = when (size) {
+    VideoBufferSize.SMALL -> stringResource(R.string.profile_buffer_size_small_desc)
+    VideoBufferSize.STANDARD -> stringResource(R.string.profile_buffer_size_standard_desc)
+    VideoBufferSize.LARGE -> stringResource(R.string.profile_buffer_size_large_desc)
+    VideoBufferSize.ULTRA -> stringResource(R.string.profile_buffer_size_ultra_desc)
+}
+
+/** 视频缓冲大小设置底部弹窗：分别配置 Wi-Fi 与数据流量下的预缓冲时长 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun VideoBufferSizeSheet(
+    wifiBufferSize: VideoBufferSize,
+    cellularBufferSize: VideoBufferSize,
+    onWifiBufferSizeChange: (VideoBufferSize) -> Unit,
+    onCellularBufferSizeChange: (VideoBufferSize) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.profile_buffer_size),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.profile_buffer_size_sheet_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(18.dp))
+            BufferNetworkSection(
+                icon = AppIcons.Wifi,
+                title = stringResource(R.string.profile_buffer_network_wifi),
+                selected = wifiBufferSize,
+                onSelect = onWifiBufferSizeChange
+            )
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(
+                thickness = 0.8.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+            Spacer(Modifier.height(16.dp))
+            BufferNetworkSection(
+                icon = AppIcons.SignalCellularAlt,
+                title = stringResource(R.string.profile_buffer_network_cellular),
+                selected = cellularBufferSize,
+                onSelect = onCellularBufferSizeChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun BufferNetworkSection(
+    icon: ImageVector,
+    title: String,
+    selected: VideoBufferSize,
+    onSelect: (VideoBufferSize) -> Unit
+) {
+    val haptics = rememberAppHaptics()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${videoBufferSizeLabel(selected)} · ${videoBufferSizeTierLabel(selected)}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            VideoBufferSize.entries.forEach { option ->
+                val isSelected = option == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(AppShapes.Medium)
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        )
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = AppShapes.Medium
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .clickable {
+                            haptics.tick()
+                            onSelect(option)
+                        }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = videoBufferSizeLabel(option),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = videoBufferSizeTierLabel(option),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = videoBufferSizeDesc(selected),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

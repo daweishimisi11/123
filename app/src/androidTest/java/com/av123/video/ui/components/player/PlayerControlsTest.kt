@@ -2,6 +2,7 @@ package com.av123.video.ui.components.player
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,6 +45,38 @@ class PlayerControlsTest {
         composeRule.onNodeWithText("选集").assertDoesNotExist()
         composeRule.onNodeWithText("左上角缓冲秒数").assertIsDisplayed().performClick()
         assertEquals(true, bufferToggledTo)
+    }
+
+    @Test
+    fun settingsSheet_bufferSubpage_updatesWifiAndCellularSeparately() {
+        var wifiPicked: com.av123.video.data.prefs.VideoBufferSize? = null
+        var cellularPicked: com.av123.video.data.prefs.VideoBufferSize? = null
+        composeRule.setContent {
+            SettingsSheet(
+                resizeMode = ResizeModeOption.FIT,
+                onResizeModeChange = {},
+                autoPlayNext = true,
+                onAutoPlayNextChange = {},
+                flipToExitEnabled = false,
+                onFlipToExitChange = {},
+                showBufferHealth = false,
+                onShowBufferHealthChange = {},
+                wifiBufferSize = com.av123.video.data.prefs.VideoBufferSize.LARGE,
+                onWifiBufferSizeChange = { wifiPicked = it },
+                cellularBufferSize = com.av123.video.data.prefs.VideoBufferSize.SMALL,
+                onCellularBufferSizeChange = { cellularPicked = it },
+                onShowStats = {},
+                onDismiss = {}
+            )
+        }
+
+        composeRule.onNodeWithText("视频缓冲").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Wi-Fi 网络").assertIsDisplayed()
+        composeRule.onNodeWithText("数据流量").assertIsDisplayed()
+        composeRule.onAllNodesWithText("120 秒")[0].performClick()
+        assertEquals(com.av123.video.data.prefs.VideoBufferSize.ULTRA, wifiPicked)
+        composeRule.onAllNodesWithText("30 秒")[1].performClick()
+        assertEquals(com.av123.video.data.prefs.VideoBufferSize.STANDARD, cellularPicked)
     }
 
     @Test

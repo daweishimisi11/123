@@ -1,6 +1,9 @@
 package com.av123.video.ui.components.player
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -11,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.av123.video.data.playback.MediaCache
+import com.av123.video.data.prefs.VideoBufferSize
 
 /**
  * 持有 [ExoPlayer] 实例，跨 Activity 配置变更（旋转、分屏等）时保持播放状态，
@@ -24,12 +28,36 @@ class PlayerViewModel : ViewModel() {
     /** 播放源身份：URL 相同但 Referer/UA 等请求头变化时必须重建播放器 */
     private var initializedKey: MediaKey? = null
 
+    @Volatile
+    private var wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI
+
+    @Volatile
+    private var cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR
+
+    @Volatile
+    private var networkCategory: BufferNetworkCategory = BufferNetworkCategory.WIFI
+
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
     private data class MediaKey(
         val url: String,
         val headers: Map<String, String>
     )
 
-    fun initialize(context: Context, url: String, headers: Map<String, String>): ExoPlayer {
+    fun updateBufferConfig(wifi: VideoBufferSize, cellular: VideoBufferSize) {
+        wifiBufferSize = wifi
+        cellularBufferSize = cellular
+    }
+
+    fun initialize(
+        context: Context,
+        url: String,
+        headers: Map<String, String>,
+        wifiBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_WIFI,
+        cellularBufferSize: VideoBufferSize = VideoBufferSize.DEFAULT_CELLULAR
+    ): ExoPlayer {
+        updateBufferConfig(wifiBufferSize, cellularBufferSize)
         val key = MediaKey(url, headers.toMap())
         val existing = player
         if (existing != null && initializedKey == key) {
@@ -40,6 +68,8 @@ class PlayerViewModel : ViewModel() {
         releasePlayer()
 
         val appContext = context.applicationContext
+        registerNetworkMonitor(appContext)
+
         // 带宽计量器：作为 TransferListener 挂到 HTTP 数据源上估算带宽，
         // 单例在应用内复用，供自适应码率选择使用
         val meter = DefaultBandwidthMeter.getSingletonInstance(appContext)
@@ -59,6 +89,14 @@ class PlayerViewModel : ViewModel() {
             // 网络抖动/429/5xx 有限重试；403 等签名失效立即失败，交给抓流兜底
             .setLoadErrorHandlingPolicy(RetryLoadErrorHandlingPolicy())
 
+        val loadControl = NetworkAwareLoadControl {
+            selectActiveBufferSize(
+                category = networkCategory,
+                wifiBufferSize = this.wifiBufferSize,
+                cellularBufferSize = this.cellularBufferSize
+            )
+        }
+
         // 媒体播放音频属性：交由 ExoPlayer 管理音频焦点
         // （与其他音频 App 并发时自动暂停/降低音量、焦点恢复后续播），
         // 并在耳机拔出/蓝牙断开（ACTION_AUDIO_BECOMING_NOISY）时自动暂停
@@ -69,6 +107,7 @@ class PlayerViewModel : ViewModel() {
 
         val newPlayer = ExoPlayer.Builder(appContext)
             .setBandwidthMeter(meter)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
@@ -85,7 +124,42 @@ class PlayerViewModel : ViewModel() {
         return newPlayer
     }
 
+    private fun registerNetworkMonitor(appContext: Context) {
+        networkCategory = readBufferNetworkCategory(appContext)
+        val cm = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                networkCategory = resolveBufferNetworkCategory(
+                    hasWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+                    hasEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET),
+                    hasCellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
+                    isMetered = cm.isActiveNetworkMetered
+                )
+            }
+
+            override fun onLost(network: Network) {
+                networkCategory = readBufferNetworkCategory(appContext)
+            }
+        }
+        if (runCatching { cm.registerDefaultNetworkCallback(callback) }.isSuccess) {
+            connectivityManager = cm
+            networkCallback = callback
+        }
+    }
+
+    private fun unregisterNetworkMonitor() {
+        val cm = connectivityManager
+        val callback = networkCallback
+        if (cm != null && callback != null) {
+            runCatching { cm.unregisterNetworkCallback(callback) }
+        }
+        connectivityManager = null
+        networkCallback = null
+    }
+
     fun releasePlayer() {
+        unregisterNetworkMonitor()
         if (player != null) {
             MediaCache.onPlayerReleased()
         }
