@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: device-tests-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   connected:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
@@ -36,6 +40,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -50,7 +57,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --console=plain
+          script: ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace
 
       - name: Run Macrobenchmark
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.benchmark }}
@@ -60,4 +67,75 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :benchmark:connectedBenchmarkAndroidTest --console=plain
+          script: ./gradlew :benchmark:connectedBenchmarkAndroidTest --console=plain --stacktrace
+
+      - name: Print instrumented test summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import xml.etree.ElementTree as ET
+
+          xml_files = sorted(glob.glob("**/build/outputs/androidTest-results/connected/**/*.xml", recursive=True))
+          if not xml_files:
+              print("No androidTest XML result files found.")
+              raise SystemExit(0)
+
+          total_tests = 0
+          total_failures = 0
+          total_errors = 0
+          total_skipped = 0
+          failures = []
+
+          for path in xml_files:
+              tree = ET.parse(path)
+              root = tree.getroot()
+              suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+              for suite in suites:
+                  t = int(suite.attrib.get("tests", 0))
+                  f = int(suite.attrib.get("failures", 0))
+                  e = int(suite.attrib.get("errors", 0))
+                  s = int(suite.attrib.get("skipped", 0))
+                  total_tests += t
+                  total_failures += f
+                  total_errors += e
+                  total_skipped += s
+                  for tc in suite.findall("testcase"):
+                      cls = tc.attrib.get("classname", "")
+                      name = tc.attrib.get("name", "")
+                      for tag in ("failure", "error"):
+                          node = tc.find(tag)
+                          if node is not None:
+                              msg = node.attrib.get("message", "")
+                              body = (node.text or "").strip()
+                              failures.append((f"{cls}#{name}", tag, msg, body))
+
+          summary = f"Total: {total_tests}, Failures: {total_failures}, Errors: {total_errors}, Skipped: {total_skipped}"
+          print(summary)
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write(f"### Device Tests Summary\n\n{summary}\n\n")
+                  for test_id, tag, msg, body in failures:
+                      fh.write(f"- `{test_id}` ({tag}): {msg}\n")
+
+          for test_id, tag, msg, body in failures:
+              print(f"\n=== {tag.upper()}: {test_id} ===")
+              if msg:
+                  print(f"Message: {msg}")
+              if body:
+                  print(body[:4000])
+          PY
+
+      - name: Upload instrumented test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-test-reports-${{ github.run_number }}
+          if-no-files-found: ignore
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            benchmark/build/reports/androidTests/
+            benchmark/build/outputs/androidTest-results/
