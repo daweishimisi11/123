@@ -376,16 +376,16 @@ fun VideoPlayer(
     // 控制层任意触摸都重置 3s 自动隐藏计时
     var controlInteractionTick by remember { mutableIntStateOf(0) }
     var isControlPopupVisible by remember { mutableStateOf(false) }
-    // 拖动进度条期间禁止控制层自动隐藏（小圆点离手后再重新计时）
-    var isSeeking by remember { mutableStateOf(false) }
+    // 拖动进度条期间禁止控制层自动隐藏（小圆点离手后再重新计时）；随播放器实例复位
+    var isSeeking by remember(player) { mutableStateOf(false) }
     var selectedSpeed by remember { mutableFloatStateOf(1f) }
     // 是否处于画中画：PiP 中保持播放并隐藏全部控件/手势
     var isInPip by remember { mutableStateOf(false) }
     // 长按画面快放中：临时强制 2x，松手恢复 selectedSpeed。
     // 以 player 为 key：重新抓流更换播放器实例时状态一并复位。
     var isLongPressSpeed by remember(player) { mutableStateOf(false) }
-    var availableTracks by remember { mutableStateOf<List<VideoTrack>>(emptyList()) }
-    var selectedTrack by remember { mutableStateOf<VideoTrack?>(null) }
+    var availableTracks by remember(player) { mutableStateOf<List<VideoTrack>>(emptyList()) }
+    var selectedTrack by remember(player) { mutableStateOf<VideoTrack?>(null) }
     var activeTrackHeight by remember(player) { mutableIntStateOf(0) }
     // 播放统计浮层（类似 YouTube “统计信息”）
     var showPlaybackStats by remember { mutableStateOf(false) }
@@ -731,8 +731,8 @@ fun VideoPlayer(
         }
     }
 
-    // 长按快放：按住期间强制 2x；松手或播放出错时恢复倍速菜单所选速度
-    LaunchedEffect(isLongPressSpeed, error) {
+    // 长按快放：按住期间强制 2x；松手、换集或播放出错时恢复倍速菜单所选速度
+    LaunchedEffect(player, isLongPressSpeed, error) {
         if (isLongPressSpeed && error == null) {
             player.setPlaybackSpeed(LONG_PRESS_SPEED)
         } else {
@@ -807,7 +807,9 @@ fun VideoPlayer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(isInPip, isLocked) {
+                // 必须以 player 为 key：缓存命中原地换集时 player 与 remember(player) 状态都会重建，
+                // 不重启 pointerInput 会继续捕获已释放的旧 player 与旧 position/duration
+                .pointerInput(player, isInPip, isLocked) {
                     if (isInPip) return@pointerInput
                     if (isLocked) {
                         detectTapGestures(
@@ -867,7 +869,12 @@ fun VideoPlayer(
                         }
                     )
                 }
-                .pointerInput(isLocked, verticalGestureDeadZonePx, horizontalGestureDeadZonePx) {
+                .pointerInput(
+                    player,
+                    isLocked,
+                    verticalGestureDeadZonePx,
+                    horizontalGestureDeadZonePx
+                ) {
                     // 横滑 Seek：累积横向位移换算成目标时间，拖动中只显示预览气泡，
                     // 抬手才真正 seekTo（主流 App 交互，避免拖动中途频繁跳转）；
                     // 全屏下避开边缘系统手势死区，防止边缘操作误触发快进/快退
@@ -932,7 +939,12 @@ fun VideoPlayer(
                         }
                     )
                 }
-                .pointerInput(isLocked, verticalGestureDeadZonePx, horizontalGestureDeadZonePx) {
+                .pointerInput(
+                    player,
+                    isLocked,
+                    verticalGestureDeadZonePx,
+                    horizontalGestureDeadZonePx
+                ) {
                     // 竖向滑动手势（全屏安全区内生效）：左侧调屏幕亮度，右侧调媒体音量；
                     // 顶部下拉状态栏 / 底部上滑导航栏 / 侧边返回等边缘死区发起的手势直接忽略
                     var gestureSide = VerticalGestureSide.VOLUME
