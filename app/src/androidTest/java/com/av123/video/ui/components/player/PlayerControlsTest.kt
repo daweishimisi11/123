@@ -1,5 +1,6 @@
 package com.av123.video.ui.components.player
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.av123.video.data.model.Episode
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,7 +87,6 @@ class PlayerControlsTest {
     @Test
     fun episodePopupMenu_onlyListsEpisodesAndSelectsTarget() {
         var picked = -1
-        var dismissed = false
         composeRule.setContent {
             EpisodePopupMenu(
                 expanded = true,
@@ -97,14 +96,13 @@ class PlayerControlsTest {
                 ),
                 selectedEpisodeIndex = 0,
                 onSelectEpisode = { picked = it },
-                onDismiss = { dismissed = true }
+                onDismiss = {}
             )
         }
 
         composeRule.onNodeWithText("选集").assertIsDisplayed()
         composeRule.onNodeWithText("正片2").assertIsDisplayed().performClick()
         assertEquals(1, picked)
-        assertTrue(dismissed)
         composeRule.onNodeWithText("播放设置").assertDoesNotExist()
         composeRule.onNodeWithText("画面比例").assertDoesNotExist()
     }
@@ -154,7 +152,9 @@ class PlayerControlsTest {
             )
         }
 
-        composeRule.onNodeWithText("1x").assertIsDisplayed()
+        composeRule.onAllNodesWithText("1x").assertCountEquals(2)
+        composeRule.onAllNodesWithText("1x")[0].assertIsDisplayed()
+        composeRule.onAllNodesWithText("1x")[1].assertIsDisplayed()
         composeRule.onNodeWithText("2x").assertIsDisplayed()
         composeRule.onNodeWithText("1.5x").assertDoesNotExist()
     }

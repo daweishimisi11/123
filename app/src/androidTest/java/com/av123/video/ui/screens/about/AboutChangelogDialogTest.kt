@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -21,6 +22,7 @@ class AboutChangelogDialogTest {
     fun changelogDialog_displaysVersionsAndHandlesActions() {
         var openedReleases = false
         var dismissed = false
+        assertTrue(APP_CHANGELOG.size >= 2)
 
         composeRule.setContent {
             MaterialTheme {
@@ -33,8 +35,8 @@ class AboutChangelogDialogTest {
         }
 
         composeRule.onNodeWithText("更新日志").assertIsDisplayed()
-        composeRule.onNodeWithText("v0.2.5").assertIsDisplayed()
-        composeRule.onNodeWithText("v0.2.4").assertIsDisplayed()
+        composeRule.onNodeWithText(APP_CHANGELOG[0].version).assertIsDisplayed()
+        composeRule.onNodeWithText(APP_CHANGELOG[1].version).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("全部版本").performClick()
         assertTrue(openedReleases)
         composeRule.onNodeWithText("关闭").performClick()
@@ -64,7 +66,7 @@ class AboutChangelogDialogTest {
         assertTrue(checkedUpdate)
         composeRule.onNodeWithText("更新日志").assertIsDisplayed().performClick()
         assertTrue(openedChangelog)
-        composeRule.onNodeWithText("项目主页").assertIsDisplayed()
+        composeRule.onNodeWithText("项目地址").assertIsDisplayed()
         composeRule.onNodeWithText("问题反馈").assertIsDisplayed()
     }
 }
