@@ -83,6 +83,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -108,6 +109,7 @@ import com.av123.video.ui.components.PaginationBar
 import com.av123.video.ui.components.rememberTogglePopScale
 import com.av123.video.ui.components.VideoGridCard
 import com.av123.video.ui.components.VideoPreviewDialog
+import com.av123.video.ui.screens.detail.rememberDetailTextMetrics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -480,6 +482,7 @@ internal fun ActressCard(entry: IndexEntry, onClick: () -> Unit) {
         label = "actressCapsuleHeart"
     )
     val heartScale = rememberTogglePopScale(active = isFollowed)
+    val detailTextMetrics = rememberDetailTextMetrics()
 
     Surface(
         shape = AppShapes.ExtraLarge,
@@ -505,10 +508,13 @@ internal fun ActressCard(entry: IndexEntry, onClick: () -> Unit) {
             ) {
                 Text(
                     text = entry.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = detailTextMetrics.videoTitleFontSp.sp,
+                        lineHeight = detailTextMetrics.videoTitleLineHeightSp.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(

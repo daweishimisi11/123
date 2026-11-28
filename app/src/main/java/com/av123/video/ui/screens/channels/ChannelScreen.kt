@@ -48,6 +48,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -57,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +83,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -99,6 +102,7 @@ import com.av123.video.data.model.Video
 import com.av123.video.data.prefs.VideoLayout
 import com.av123.video.data.repository.CategoryPageState
 import com.av123.video.data.repository.VideoRepository
+import com.av123.video.data.source.extractActressSlugFromPath
 import com.av123.video.ui.components.EmptyState
 import com.av123.video.ui.components.ErrorState
 import com.av123.video.ui.components.LoadingState
@@ -108,6 +112,7 @@ import com.av123.video.ui.components.rememberTogglePopScale
 import com.av123.video.ui.components.VideoGridCard
 import com.av123.video.ui.components.VideoLayoutToggle
 import com.av123.video.ui.components.VideoPreviewDialog
+import com.av123.video.ui.screens.detail.rememberDetailTextMetrics
 import com.av123.video.ui.util.rememberAppHaptics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -312,6 +317,14 @@ fun ChannelScreen(
     // 搜索展开时系统返回键优先收起搜索框，而不是直接退出页面
     BackHandler(enabled = searchExpanded) { searchExpanded = false }
     val actressSearchField = state.searchField
+    val detailTextMetrics = rememberDetailTextMetrics()
+    val isActressDetailPage = remember(path, state.actressProfile) {
+        state.actressProfile != null || extractActressSlugFromPath(path) != null
+    }
+    val countSubtitle = state.totalCountText
+        ?: state.totalCount?.let {
+            stringResource(R.string.channel_video_count, it)
+        }
 
     Scaffold(
         topBar = {
@@ -349,16 +362,30 @@ fun ChannelScreen(
                     )
                 } else {
                     TopAppBar(
+                        expandedHeight = when {
+                            !isActressDetailPage -> TopAppBarDefaults.TopAppBarExpandedHeight
+                            countSubtitle == null -> detailTextMetrics.topBarHeightDp.dp
+                            else -> maxOf(detailTextMetrics.topBarHeightDp, 60).dp
+                        },
                         title = {
                             // 页头 .pagehead__count 作副标题：优先展示网页原文
                             // （视频页“361,346个视频”、女演员页“36,558位女演员”单位不同）；
                             // 只有数值没有原文时回退“N 个视频”格式
                             Column {
-                                Text(title, maxLines = 1)
-                                val countSubtitle = state.totalCountText
-                                    ?: state.totalCount?.let {
-                                        stringResource(R.string.channel_video_count, it)
-                                    }
+                                Text(
+                                    text = title,
+                                    style = if (isActressDetailPage) {
+                                        MaterialTheme.typography.titleMedium.copy(
+                                            fontSize = detailTextMetrics.headerCodeFontSp.sp,
+                                            lineHeight = detailTextMetrics.headerCodeLineHeightSp.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    } else {
+                                        LocalTextStyle.current
+                                    },
+                                    maxLines = if (isActressDetailPage) detailTextMetrics.headerMaxLines else 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                                 countSubtitle?.let { subtitle ->
                                     Text(
                                         text = subtitle,

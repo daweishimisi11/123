@@ -1,12 +1,23 @@
 package com.av123.video.ui.screens.channels
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.av123.video.data.model.ActressProfile
+import com.av123.video.ui.screens.detail.resolveDetailTextMetrics
+import android.content.res.Configuration
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -67,5 +78,42 @@ class ActressHeroCardTest {
         }
 
         composeRule.onNodeWithText("Miu Shiramine (白峰ミウ)").assertIsDisplayed()
+    }
+
+    @Test
+    fun actressHeroCard_longBilingualNameUsesDetailTitleSizeWithoutEllipsis() {
+        val profile = ActressProfile(
+            name = "Very Long Actress Name Example",
+            japaneseName = "とても長い女優名サンプルテスト"
+        )
+        var expectedFontSp = 0f
+
+        composeRule.setContent {
+            val configuration = LocalConfiguration.current
+            expectedFontSp = resolveDetailTextMetrics(
+                screenWidthDp = configuration.screenWidthDp,
+                isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+            ).videoTitleFontSp
+            MaterialTheme {
+                Box(modifier = Modifier.width(320.dp)) {
+                    ActressHeroCard(
+                        profile = profile,
+                        isFollowed = false,
+                        followEnabled = false,
+                        onToggleFollow = {}
+                    )
+                }
+            }
+        }
+
+        val node = composeRule.onNodeWithText("Very Long Actress Name Example (とても長い女優名サンプルテスト)")
+        node.assertIsDisplayed()
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        val getTextLayout = node.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult]
+        assertTrue(getTextLayout.action?.invoke(layouts) == true)
+        assertEquals(1, layouts.size)
+        assertFalse(layouts.first().hasVisualOverflow)
+        assertEquals(expectedFontSp, layouts.first().layoutInput.style.fontSize.value, 0.01f)
     }
 }

@@ -77,7 +77,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import android.content.res.Configuration
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -509,6 +511,15 @@ internal fun resolveDetailTextMetrics(
         videoTitleFontSp = 18f,
         videoTitleLineHeightSp = 25f
     )
+}
+
+@Composable
+internal fun rememberDetailTextMetrics(): DetailTextMetrics {
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    return remember(configuration.screenWidthDp, isPortrait) {
+        resolveDetailTextMetrics(configuration.screenWidthDp, isPortrait)
+    }
 }
 
 @Composable
